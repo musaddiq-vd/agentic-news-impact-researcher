@@ -24,8 +24,8 @@ All nodes read and write one shared `GraphState`:
 | 2 | `news_search` | No | Run each query on Tavily and dedupe results by URL | `queries` → `raw_results` |
 | 3 | `filter_rank` | No (code) | Drop undated and older-than-30-day news, rank, keep the top 8 | `raw_results` → `articles` |
 | 4 | `impact_analyzer` | Nova Lite | Build an impact card per article; mark articles not relevant to the business | `articles` → `cards` |
-| 5 | `summarizer` | Nova Lite | Write 3-5 summary points from the cards only, each with article IDs | `cards` → `summary` |
-| 6 | `validator` | No (code) | Drop unknown source IDs, points without a source, and numbers that are not in the article text | `cards, summary, articles` → clean `cards, summary` |
+| 5 | `summarizer` | Nova Lite | Write up to 5 summary points from the relevant cards only, each with article IDs (fewer when the news says little) | `cards` → `summary` |
+| 6 | `validator` | No (code) | Drop unknown source IDs, points without a source, numbers that are not in the article text, and points whose wording is not found in their cited sources | `cards, summary, articles` → clean `cards, summary` |
 
 **Schemas (Pydantic, JSON):**
 ```json
@@ -104,6 +104,7 @@ tests/
 5. `validator`:
    - `source_ids` must match real articles.
    - Any number in a summary/reason must appear in the source article text, otherwise the point is dropped.
+   - Grounding check: at least 70% of a summary point's content words must appear in its cited articles or cards, otherwise the point is dropped. Live runs showed invented claims scoring 0.50-0.62 and news-based points 0.64-1.00.
    - Enum values are checked.
 6. The summarizer only receives validated cards, never raw web text.
 
@@ -170,7 +171,7 @@ Request limits: `question` 1-500 characters, `topic` must be one of the known to
 8. **graph.py** ✅: Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
 9. **db.py** ✅: Test: in-memory SQLite save → list → get.
 10. **api.py** ✅: Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
-11. **streamlit_app.py:** Manual: start the API, ask the 5 REQUIREMENTS test questions, check the format.
+11. **streamlit_app.py** ✅: Manual: start the API, ask the 5 REQUIREMENTS test questions, check the format.
 
 ## Verification (at the end)
 - All `pytest` tests pass.

@@ -44,8 +44,11 @@ Rules:
 SUMMARY_SYSTEM = f"""You write a short summary for the owner of this business: {profile.BUSINESS}, {profile.LOCATION}.
 
 Rules:
-- Write 3 to 5 points, each one sentence, answering the user's question.
-- Each point states what happened and what it means for the business, using the item's impact and why fields.
+- Write up to 5 points, each one sentence. Write fewer points when the items say little; never pad.
+- Each point restates a specific fact from the cited item(s), staying close to the item's own wording, then what it means for the business using that item's impact and why fields.
+- The question is NOT a source. Never present something from the question as a fact (for example, do not say prices rose or costs will rise unless a cited item says so).
+- Never give advice or recommendations (no "should", "must consider", "needs to").
+- Every point must list at least one source ID. A point you cannot support with an item must not be written.
 - Use ONLY the news items given. Never add a fact, number, name or date that is not in them.
 - Every point lists source_ids: the IDs, in brackets, of the news items it relies on. Use only IDs that were given.
 - Never write URLs.

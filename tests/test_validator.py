@@ -72,6 +72,28 @@ def test_point_dropped_when_source_card_removed():
     assert out == []
 
 
+def test_point_dropped_when_claim_is_not_in_the_sources():
+    # Every number is fine, but the claim itself is not in the article or card.
+    text = "Transportation costs and labour shortages will squeeze factory profitability"
+    pts = [SummaryPoint(text=text, source_ids=[1])]
+    _, out = validate([card(1)], pts, [article(1)])
+    assert out == []
+
+
+def test_paraphrased_point_with_plurals_is_kept():
+    art = article(1, content="Solar module makers face higher import duties on cells.")
+    pts = [SummaryPoint(text="Module makers face higher import duty on solar cells", source_ids=[1])]
+    _, out = validate([card(1)], pts, [art])
+    assert len(out) == 1
+
+
+def test_point_may_use_words_from_the_card_text():
+    c = card(1, summary="Net metering rules were relaxed", reason="Rooftop demand may rise")
+    pts = [SummaryPoint(text="Relaxed net metering rules may raise rooftop demand", source_ids=[1])]
+    _, out = validate([c], pts, [article(1, content="Solar import duty is 40 percent from April.")])
+    assert len(out) == 1
+
+
 def test_point_dropped_for_invented_number():
     pts = [SummaryPoint(text="Prices fell 12 percent", source_ids=[1])]
     _, out = validate([card(1)], pts, [article(1)])

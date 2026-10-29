@@ -14,8 +14,15 @@ MAX_POINTS = 5
 RETRIES = 1
 
 
+class LLMPoint(BaseModel):
+    """Lenient on purpose: a point without sources is dropped alone, not the whole summary."""
+
+    text: str
+    source_ids: list[int] = []
+
+
 class SummaryOutput(BaseModel):
-    points: list[SummaryPoint]
+    points: list[LLMPoint]
 
 
 def _items(cards: list[ImpactCard], articles: list[Article]) -> str:
@@ -51,10 +58,16 @@ def summarize(
     ]
     for _ in range(RETRIES + 1):
         try:
-            points = chain.invoke(messages).points
+            output = chain.invoke(messages)
         except Exception as exc:
             log.warning("summarizer failed: %s", exc)
             continue
+        # Rule 1: a point without a source is dropped.
+        points = [
+            SummaryPoint(text=p.text, source_ids=p.source_ids)
+            for p in output.points
+            if p.text.strip() and p.source_ids
+        ]
         if points:
             return points[:MAX_POINTS]
     return []

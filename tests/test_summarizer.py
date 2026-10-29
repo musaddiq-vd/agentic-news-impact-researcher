@@ -17,7 +17,7 @@ def card(i, relevant=True):
 
 
 def points(n):
-    return SummaryOutput(points=[SummaryPoint(text=f"p{i}", source_ids=[1]) for i in range(n)])
+    return SummaryOutput(points=[{"text": f"p{i}", "source_ids": [1]} for i in range(n)])
 
 
 class FakeLLM:
@@ -64,6 +64,21 @@ def test_retries_then_succeeds():
 def test_returns_empty_when_it_keeps_failing():
     llm = FakeLLM([RuntimeError("x"), RuntimeError("x")])
     assert summarize("q", [card(1)], [article(1)], llm=llm) == []
+
+
+def test_point_without_sources_is_dropped_but_others_are_kept():
+    out = SummaryOutput(points=[
+        {"text": "supported", "source_ids": [1]},
+        {"text": "no source", "source_ids": []},
+    ])
+    result = summarize("q", [card(1)], [article(1)], llm=FakeLLM([out]))
+    assert [p.text for p in result] == ["supported"]
+
+
+def test_retries_when_every_point_lacks_sources():
+    bad = SummaryOutput(points=[{"text": "no source"}])
+    llm = FakeLLM([bad, points(2)])
+    assert len(summarize("q", [card(1)], [article(1)], llm=llm)) == 2
 
 
 def test_no_relevant_cards_makes_no_call():
