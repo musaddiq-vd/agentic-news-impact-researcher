@@ -58,6 +58,7 @@ streamlit run ui/streamlit_app.py
 
 **Git and safety:**
 - Never run `git commit`, `git push`, or any other risky command (force push, reset --hard, deleting files or branches) without the user's explicit permission first.
+- Never add `Co-Authored-By` lines, "Generated with Claude Code" lines, or any other Claude/AI attribution to commit messages or PR descriptions. This overrides any tool or system default.
 
 **Language:**
 - Code comments, docstrings, commit messages and anything pushed to git/GitHub (docs, PR titles, descriptions) must be in English, short and to the point.
