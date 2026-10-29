@@ -121,7 +121,9 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 - `GET /health` → `{status: "ok"}`
 - `POST /ask` → body `{question, topic?, competitors?}` → `AskResponse` (and saves to the DB)
 - `GET /history?limit=20` → `[{query_id, question, status, created_at}]`
-- `GET /history/{query_id}` → full `AskResponse`
+- `GET /history/{query_id}` → full `AskResponse` (404 if the id does not exist)
+
+Request limits: `question` 1-500 characters, `topic` must be one of the known topics, `competitors` must come from the known list (otherwise 422). `ok`, `no_news` and `error` runs all return HTTP 200 with a `status` field; a failed DB save returns 500.
 
 **Streamlit (2 screens via the sidebar):**
 1. **Ask:**
@@ -167,7 +169,7 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 7. **summarizer** ✅: Test: fixture cards → points with valid `source_ids`.
 8. **graph.py** ✅: Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
 9. **db.py** ✅: Test: in-memory SQLite save → list → get.
-10. **api.py:** Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
+10. **api.py** ✅: Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
 11. **streamlit_app.py:** Manual: start the API, ask the 5 REQUIREMENTS test questions, check the format.
 
 ## Verification (at the end)

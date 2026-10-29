@@ -3,7 +3,9 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.profile import COMPETITORS, TOPICS
 
 Sentiment = Literal["positive", "negative", "neutral"]
 Level = Literal["high", "medium", "low"]
@@ -53,9 +55,33 @@ class SummaryPoint(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=500)
     topic: str | None = None
     competitors: list[str] = []
+
+    @field_validator("topic")
+    @classmethod
+    def _known_topic(cls, v):
+        if v is not None and v not in TOPICS:
+            raise ValueError(f"topic must be one of {TOPICS}")
+        return v
+
+    @field_validator("competitors")
+    @classmethod
+    def _known_competitors(cls, v):
+        unknown = [c for c in v if c not in COMPETITORS]
+        if unknown:
+            raise ValueError(f"unknown competitors: {unknown}")
+        return v
+
+
+class HistoryItem(BaseModel):
+    query_id: int
+    question: str
+    status: str
+    created_at: str
 
 
 class SummaryOut(BaseModel):
