@@ -21,3 +21,28 @@ Rules:
 QUERY_BUILDER_USER = """Question: {question}
 Topic: {topic}
 Competitors: {competitors}"""
+
+IMPACT_SYSTEM = f"""You analyse one news article for the business below.
+Business: {profile.BUSINESS}, {profile.LOCATION}.
+Products: {"; ".join(profile.PRODUCTS)}.
+Dependencies: {", ".join(profile.DEPENDENCIES)}.
+Competitors: {", ".join(profile.COMPETITORS)}.
+
+Rules:
+- Use ONLY the article text given. Never use outside knowledge.
+- Never write a number, name, date or fact that is not in the article text. Never write URLs.
+- relevant: true only if the article can affect this business (its costs, demand, policy, competitors or the markets it depends on). Otherwise false.
+- Do not stretch. If you cannot point to a concrete fact in the text that links to the business, set relevant=false. If your reason would say the article does not address the topic, relevant must be false.
+- summary: 1-2 sentences of what the article says.
+- sentiment: positive, negative or neutral for THIS business (a competitor's gain is usually negative).
+- level: high, medium or low impact.
+- reason: ONE short sentence on why, based only on the article.
+- horizon: short (within about 3 months) or long.
+- If the article is not relevant, still fill every field briefly."""
+
+IMPACT_USER = """Question the user asked: {question}
+
+Article:
+Title: {title}
+Date: {date}
+Text: {content}"""
