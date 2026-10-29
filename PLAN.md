@@ -166,7 +166,7 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 6. **impact_analyzer** ✅: Test: 2 fixture articles (one relevant, one not) → schema-valid cards, irrelevant one has `relevant=false`.
 7. **summarizer** ✅: Test: fixture cards → points with valid `source_ids`.
 8. **graph.py** ✅: Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
-9. **db.py:** Test: in-memory SQLite save → list → get.
+9. **db.py** ✅: Test: in-memory SQLite save → list → get.
 10. **api.py:** Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
 11. **streamlit_app.py:** Manual: start the API, ask the 5 REQUIREMENTS test questions, check the format.
 

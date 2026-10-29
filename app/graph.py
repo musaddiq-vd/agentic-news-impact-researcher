@@ -156,7 +156,10 @@ def run_graph(
     competitors: list[str] | None = None,
     nodes: Nodes | None = None,
 ) -> dict:
-    """Run the flow; returns status, message, summary (with URLs) and cards. Never saves to the DB."""
+    """Run the flow; returns status, message, summary (with URLs), cards and ranked articles.
+
+    Never saves to the DB; the caller (api.py) does that.
+    """
     final = build_graph(nodes).invoke(
         {"question": question, "topic": topic, "competitors": competitors or []}
     )
@@ -165,6 +168,7 @@ def run_graph(
         "message": final.get("message"),
         "summary": final.get("out_summary", []),
         "cards": final.get("out_cards", []),
+        "articles": final.get("articles", []),
     }
 
 

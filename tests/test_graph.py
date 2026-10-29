@@ -60,6 +60,7 @@ def test_happy_path_runs_every_node_in_order():
     assert result["status"] == "ok" and result["message"] is None
     assert result["summary"][0].sources == ["https://s.com/1"]
     assert result["cards"][0].url == "https://s.com/1"
+    assert [a.id for a in result["articles"]] == [1]
 
 
 def test_no_articles_stops_with_no_news():
