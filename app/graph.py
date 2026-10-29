@@ -15,7 +15,7 @@ from app.nodes.news_search import SearchError, search_news
 from app.nodes.query_builder import build_queries
 from app.nodes.summarizer import summarize
 from app.nodes.validator import validate
-from app.schemas import Article, CardOut, ImpactCard, RawArticle, SummaryOut, SummaryPoint
+from app.schemas import Article, CardOut, ImpactCard, RawArticle, SummaryOut
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,8 @@ MSG_NO_NEWS = "No relevant news found for this topic in the last 30 days."
 MSG_SEARCH_DOWN = "Search is not available right now."
 MSG_ERROR = "Something went wrong. Please try again."
 MSG_NO_SUMMARY = "Summary could not be generated."
+MSG_NOT_DIRECT = "News was found, but it does not directly answer your question."
+SUMMARY_ATTEMPTS = 2
 
 
 class GraphState(TypedDict, total=False):
@@ -33,7 +35,8 @@ class GraphState(TypedDict, total=False):
     raw_results: list[RawArticle]
     articles: list[Article]
     cards: list[ImpactCard]
-    points: list[SummaryPoint]
+    checked: tuple[list[CardOut], list[SummaryOut]]
+    answers: bool | None
     out_cards: list[CardOut]
     out_summary: list[SummaryOut]
     status: str
@@ -112,31 +115,42 @@ def build_graph(nodes: Nodes | None = None):
             return {"cards": cards, "status": "no_news", "message": MSG_NO_NEWS}
         return {"cards": cards}
 
+    @_safe
     def summary_node(state: GraphState) -> GraphState:
-        # A failed summary is not fatal: cards are still shown.
-        try:
-            return {"points": n.summarize(state["question"], state["cards"], state["articles"])}
-        except Exception:
-            log.exception("summarizer failed")
-            return {"points": []}
+        """Summarize and validate; try again if no valid point survives (LLM output varies)."""
+        checked, answers = ([], []), None
+        for _ in range(SUMMARY_ATTEMPTS):
+            try:
+                points, answers = n.summarize(state["question"], state["cards"], state["articles"])
+            except Exception:
+                # A failed summary is not fatal: cards are still shown.
+                log.exception("summarizer failed")
+                points, answers = [], None
+            question_text = " ".join([state["question"], *state.get("queries", [])])
+            checked = n.validate(state["cards"], points, state["articles"], question_text)
+            if checked[1] or not checked[0]:
+                break
+        return {"checked": checked, "answers": answers}
 
     @_safe
-    def validate_node(state: GraphState) -> GraphState:
-        cards, summary = n.validate(state["cards"], state["points"], state["articles"])
+    def final_node(state: GraphState) -> GraphState:
+        cards, summary = state["checked"]
         if not cards:
             return {"status": "no_news", "message": MSG_NO_NEWS}
-        return {
-            "out_cards": cards,
-            "out_summary": summary,
-            "status": "ok",
-            "message": None if summary else MSG_NO_SUMMARY,
-        }
+        if not summary:
+            # No summary because the news does not answer the question is not a failure.
+            message = MSG_NOT_DIRECT if state.get("answers") is False else MSG_NO_SUMMARY
+        elif state.get("answers") is False:
+            message = MSG_NOT_DIRECT  # honest note: related news, but not an answer
+        else:
+            message = None
+        return {"out_cards": cards, "out_summary": summary, "status": "ok", "message": message}
 
     g = StateGraph(GraphState)
     # Node names must differ from state keys, hence the "_node" suffix.
     for name, fn in [
         ("queries_node", queries_node), ("search_node", search_node), ("rank_node", rank_node),
-        ("impact_node", impact_node), ("summary_node", summary_node), ("validate_node", validate_node),
+        ("impact_node", impact_node), ("summary_node", summary_node), ("final_node", final_node),
     ]:
         g.add_node(name, fn)
 
@@ -145,8 +159,8 @@ def build_graph(nodes: Nodes | None = None):
     g.add_conditional_edges("search_node", _route, {"continue": "rank_node", "stop": END})
     g.add_conditional_edges("rank_node", _route, {"continue": "impact_node", "stop": END})
     g.add_conditional_edges("impact_node", _route, {"continue": "summary_node", "stop": END})
-    g.add_edge("summary_node", "validate_node")
-    g.add_edge("validate_node", END)
+    g.add_conditional_edges("summary_node", _route, {"continue": "final_node", "stop": END})
+    g.add_edge("final_node", END)
     return g.compile()
 
 

@@ -1,5 +1,7 @@
+import pytest
+
 from app.graph import (
-    MSG_ERROR, MSG_NO_NEWS, MSG_NO_SUMMARY, MSG_SEARCH_DOWN, Nodes, run_graph,
+    MSG_ERROR, MSG_NO_NEWS, MSG_NO_SUMMARY, MSG_NOT_DIRECT, MSG_SEARCH_DOWN, Nodes, run_graph,
 )
 from app.nodes.news_search import SearchError
 from app.schemas import Article, CardOut, ImpactCard, RawArticle, SummaryOut, SummaryPoint
@@ -41,7 +43,8 @@ def nodes(calls, *, queries=("q",), search=None, rank=None, analyze=None,
     search = [RawArticle(title="t", url="https://s.com/1", content="c")] if search is None else search
     rank = [article()] if rank is None else rank
     analyze = [card()] if analyze is None else analyze
-    summary = [SummaryPoint(text="p", source_ids=[1])] if summary is None else summary
+    # summarize returns (points, answers_question)
+    summary = ([SummaryPoint(text="p", source_ids=[1])], True) if summary is None else summary
     validate = ([card_out()], [SummaryOut(text="p", sources=["https://s.com/1"])]) if validate is None else validate
     return Nodes(
         build_queries=calls.rec("queries", list(queries)),
@@ -96,9 +99,91 @@ def test_unexpected_error_gives_generic_error():
 
 
 def test_summary_failure_still_returns_cards():
-    result = run_graph("q", nodes=nodes(Calls(), summary=RuntimeError("x"), validate=([card_out()], [])))
+    calls = Calls()
+    result = run_graph("q", nodes=nodes(calls, summary=RuntimeError("x"), validate=([card_out()], [])))
+    assert result["message"] == MSG_NO_SUMMARY
     assert result["status"] == "ok" and result["message"] == MSG_NO_SUMMARY
     assert len(result["cards"]) == 1 and result["summary"] == []
+    assert calls.count("summarize") == 2  # it was tried twice
+
+
+def test_summary_is_retried_when_no_valid_point_survives():
+    calls = Calls()
+    good = ([card_out()], [SummaryOut(text="p", sources=["https://s.com/1"])])
+    attempts = iter([([card_out()], []), good])
+    n = nodes(calls)
+    n.validate = lambda *a: (calls.append("validate"), next(attempts))[1]
+    result = run_graph("q", nodes=n)
+    assert calls.count("summarize") == 2 and calls.count("validate") == 2
+    assert result["status"] == "ok" and result["message"] is None
+    assert len(result["summary"]) == 1
+
+
+POINT = SummaryPoint(text="p", source_ids=[1])
+
+
+def test_not_a_direct_answer_adds_a_message_but_keeps_everything():
+    result = run_graph("q", nodes=nodes(Calls(), summary=([POINT], False)))
+    assert result["status"] == "ok" and result["message"] == MSG_NOT_DIRECT
+    assert len(result["summary"]) == 1 and len(result["cards"]) == 1
+
+
+@pytest.mark.parametrize("answers", [True, None])
+def test_direct_or_unknown_answer_has_no_message(answers):
+    result = run_graph("q", nodes=nodes(Calls(), summary=([POINT], answers)))
+    assert result["status"] == "ok" and result["message"] is None
+
+
+def test_empty_summary_because_news_does_not_answer_says_so():
+    n = nodes(Calls(), summary=([], False), validate=([card_out()], []))
+    result = run_graph("q", nodes=n)
+    assert result["status"] == "ok" and result["message"] == MSG_NOT_DIRECT
+    assert len(result["cards"]) == 1
+
+
+def test_empty_summary_for_unknown_reason_says_it_could_not_be_generated():
+    n = nodes(Calls(), summary=([], None), validate=([card_out()], []))
+    assert run_graph("q", nodes=n)["message"] == MSG_NO_SUMMARY
+
+
+def test_flag_comes_from_the_attempt_that_succeeded():
+    calls = Calls()
+    results = iter([([POINT], True), ([POINT], False)])  # first attempt validates to nothing
+    validations = iter([([card_out()], []), ([card_out()], [SummaryOut(text="p", sources=["https://s.com/1"])])])
+    n = nodes(calls)
+    n.summarize = lambda *a: next(results)
+    n.validate = lambda *a: next(validations)
+    assert run_graph("q", nodes=n)["message"] == MSG_NOT_DIRECT
+
+
+def test_validator_gets_the_question_and_search_queries():
+    seen = {}
+    n = nodes(Calls(), queries=("coal price impact", "crude oil cost"))
+
+    def validate(cards, points, articles, question_text=""):
+        seen["text"] = question_text
+        return [card_out()], [SummaryOut(text="p", sources=["https://s.com/1"])]
+
+    n.validate = validate
+    run_graph("my question", nodes=n)
+    assert seen["text"] == "my question coal price impact crude oil cost"
+
+
+def test_summary_is_not_retried_when_first_attempt_is_valid():
+    calls = Calls()
+    run_graph("q", nodes=nodes(calls))
+    assert calls.count("summarize") == 1
+
+
+def test_summary_is_not_retried_when_no_card_survives():
+    calls = Calls()
+    run_graph("q", nodes=nodes(calls, validate=([], [])))
+    assert calls.count("summarize") == 1
+
+
+def test_validator_crash_is_an_error():
+    result = run_graph("q", nodes=nodes(Calls(), validate=RuntimeError("boom")))
+    assert result["status"] == "error" and result["message"] == MSG_ERROR
 
 
 def test_empty_validated_summary_gives_message():

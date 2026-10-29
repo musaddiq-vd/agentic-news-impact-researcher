@@ -27,6 +27,10 @@ def _search_one(tool, query: str, start: str, end: str) -> list[dict]:
     for _ in range(RETRIES + 1):
         try:
             response = tool.invoke({"query": query, "start_date": start, "end_date": end})
+            if not isinstance(response, dict) or "results" not in response:
+                # The Tavily tool returns {"error": ...} instead of raising on network errors.
+                detail = response.get("error") if isinstance(response, dict) else response
+                raise RuntimeError(f"Tavily returned no results: {str(detail)[:200]}")
             return response["results"]
         except Exception as exc:
             last = exc

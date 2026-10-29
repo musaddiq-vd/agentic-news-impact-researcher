@@ -45,6 +45,7 @@ class ImpactCard(BaseModel):
     level: Level
     reason: str
     horizon: Horizon
+    evidence: str = ""  # exact quote from the article that backs the card; checked by the validator
 
 
 class SummaryPoint(BaseModel):

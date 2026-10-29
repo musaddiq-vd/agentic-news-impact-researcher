@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import streamlit as st
@@ -43,6 +44,11 @@ def age_label(published: date, today: date) -> str | None:
     return {0: "Today", 1: "Yesterday"}.get((today - published).days)
 
 
+def _domain(url: str) -> str:
+    """Short link label: the site name instead of [1], [2]."""
+    return urlparse(url).netloc.lower().removeprefix("www.") or "source"
+
+
 def _md(text: str) -> str:
     """Escape '$' so Streamlit does not render LaTeX."""
     return text.replace("$", "\\$")
@@ -62,7 +68,7 @@ def render_result(data: dict) -> None:
     if data["summary"]:
         st.subheader("Summary")
         for p in data["summary"]:
-            links = " ".join(f"[[{i}]]({u})" for i, u in enumerate(p["sources"], start=1))
+            links = " ".join(f"[[{_domain(u)}]]({u})" for u in p["sources"])
             st.markdown(f"- {_md(p['text'])} {links}")
 
     st.subheader("News impact")
@@ -82,7 +88,9 @@ def render_result(data: dict) -> None:
                 badges.append(f":orange-badge[{fresh}]")
             st.markdown(" ".join(badges))
             st.write(_md(c["summary"]))
-            st.markdown(f"**Why:** {_md(c['reason'])}")
+            if c.get("evidence"):
+                st.markdown(f"**From the article:** “{_md(c['evidence'])}”")
+            st.markdown(f"**Why (analysis):** {_md(c['reason'])}")
 
 
 def ask_page() -> None:

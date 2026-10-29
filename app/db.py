@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS impacts (
     sentiment TEXT NOT NULL,
     level TEXT NOT NULL,
     reason TEXT NOT NULL,
-    horizon TEXT NOT NULL
+    horizon TEXT NOT NULL,
+    evidence TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -50,9 +51,12 @@ def _connect(path: str | None) -> sqlite3.Connection:
 
 
 def init_db(path: str | None = None) -> None:
-    """Create the tables if they do not exist."""
+    """Create the tables if they do not exist, and add columns missing from older DBs."""
     with closing(_connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(impacts)")}
+        if "evidence" not in columns:
+            conn.execute("ALTER TABLE impacts ADD COLUMN evidence TEXT NOT NULL DEFAULT ''")
 
 
 def save_run(
@@ -94,8 +98,8 @@ def save_run(
 
         for card in result["cards"]:
             conn.execute(
-                "INSERT INTO impacts (article_id, relevant, summary, sentiment, level, reason, horizon)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO impacts (article_id, relevant, summary, sentiment, level, reason, horizon, evidence)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     db_ids[card.article_id],  # KeyError rolls the whole save back
                     int(card.relevant),
@@ -104,6 +108,7 @@ def save_run(
                     card.level,
                     card.reason,
                     card.horizon,
+                    card.evidence,
                 ),
             )
     return query_id
@@ -132,7 +137,7 @@ def get_run(query_id: int, path: str | None = None) -> AskResponse | None:
             return None
         rows = conn.execute(
             "SELECT a.rank, a.title, a.url, a.source, a.published_date,"
-            " i.relevant, i.summary, i.sentiment, i.level, i.reason, i.horizon"
+            " i.relevant, i.summary, i.sentiment, i.level, i.reason, i.horizon, i.evidence"
             " FROM impacts i JOIN articles a ON a.id = i.article_id"
             " WHERE a.query_id = ? ORDER BY a.rank",
             (query_id,),
@@ -151,6 +156,7 @@ def get_run(query_id: int, path: str | None = None) -> AskResponse | None:
                 level=r["level"],
                 reason=r["reason"],
                 horizon=r["horizon"],
+                evidence=r["evidence"],
                 title=r["title"],
                 url=r["url"],
                 source=r["source"],

@@ -16,7 +16,8 @@ def card(title="Rooftop rules updated", published=TODAY, sentiment="positive"):
     return {
         "article_id": 1, "relevant": True, "summary": "Net metering rules changed.",
         "sentiment": sentiment, "level": "high", "reason": "Demand may rise.",
-        "horizon": "short", "title": title, "url": "https://s.com/1",
+        "horizon": "short", "evidence": "Net metering rules were relaxed.",
+        "title": title, "url": "https://s.com/1",
         "source": "s.com", "published_date": published.isoformat(),
     }
 
@@ -80,9 +81,11 @@ def test_ok_result_shows_summary_links_and_cards(monkeypatch):
     at = run_ask(monkeypatch, api)
     md = texts(at.markdown)
     assert "Rules changed." in md and "https://s.com/2" in md        # summary + source links
+    assert "[[s.com]](https://s.com/1)" in md                         # link labelled by site
     assert "[Rooftop rules updated](https://s.com/1)" in md          # card title link
     assert ":green-badge[positive]" in md and ":blue-badge[high impact]" in md
-    assert ":orange-badge[Today]" in md and "**Why:** Demand may rise." in md
+    assert ":orange-badge[Today]" in md and "**Why (analysis):** Demand may rise." in md
+    assert "**From the article:** “Net metering rules were relaxed.”" in md
     assert api.calls[0][2] == {"question": "How do tariffs affect me?", "topic": "any", "competitors": []}
 
 
@@ -97,6 +100,13 @@ def test_summary_missing_shows_warning_and_cards(monkeypatch):
     at = run_ask(monkeypatch, FakeApi(ask=result(message="Summary could not be generated.", summary=[])))
     assert at.warning[0].value == "Summary could not be generated."
     assert "Rooftop rules updated" in texts(at.markdown)
+
+
+def test_not_a_direct_answer_warning_is_shown_with_the_summary(monkeypatch):
+    msg = "News was found, but it does not directly answer your question."
+    at = run_ask(monkeypatch, FakeApi(ask=result(message=msg)))
+    assert at.warning[0].value == msg
+    assert "Rules changed." in texts(at.markdown) and "Rooftop rules updated" in texts(at.markdown)
 
 
 def test_no_news_shows_info(monkeypatch):

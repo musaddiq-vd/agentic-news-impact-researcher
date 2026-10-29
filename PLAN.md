@@ -24,7 +24,7 @@ All nodes read and write one shared `GraphState`:
 | 2 | `news_search` | No | Run each query on Tavily and dedupe results by URL | `queries` → `raw_results` |
 | 3 | `filter_rank` | No (code) | Drop undated and older-than-30-day news, rank, keep the top 8 | `raw_results` → `articles` |
 | 4 | `impact_analyzer` | Nova Lite | Build an impact card per article; mark articles not relevant to the business | `articles` → `cards` |
-| 5 | `summarizer` | Nova Lite | Write up to 5 summary points from the relevant cards only, each with article IDs (fewer when the news says little) | `cards` → `summary` |
+| 5 | `summarizer` | Nova Lite | Write up to 5 fact-only summary points from the relevant cards (title and what the article says; no impact analysis), each with article IDs (fewer when the news says little) | `cards` → `summary` |
 | 6 | `validator` | No (code) | Drop unknown source IDs, points without a source, numbers that are not in the article text, and points whose wording is not found in their cited sources | `cards, summary, articles` → clean `cards, summary` |
 
 **Schemas (Pydantic, JSON):**
@@ -52,7 +52,8 @@ What happens on an error or an empty result:
 - **Tavily error / timeout:** 1 retry. If it still fails: `status=error`, message "Search is not available right now".
 - **0 news (after search or filter):** `no_news`, message "No relevant news found for this topic in the last 30 days."
 - **Invalid impact JSON:** retried for that article, then that card is dropped. Other cards continue. If every article fails, the result is `status=error` (not `no_news`).
-- **Summarizer fails:** the summary stays empty, cards are still shown (`status=ok`, message "Summary could not be generated").
+- **News found but it does not directly answer the question:** the summarizer lists the IDs of items that directly discuss what was asked (`direct_item_ids`). If none of the shown items is listed, the result is `status=ok` with the message "News was found, but it does not directly answer your question." Summary and cards are still shown. The model not saying anything is treated as unknown (no message).
+- **Summarizer fails, or no summary point survives the validator:** the summary step is tried up to 2 times. If it is still empty, the summary stays empty and cards are still shown (`status=ok`, message "Summary could not be generated"). Every point the validator drops is logged with the reason.
 - **0 points after the validator:** same as the summarizer-failure case above.
 
 ## 3. Folder structure
@@ -105,6 +106,10 @@ tests/
    - `source_ids` must match real articles.
    - Any number in a summary/reason must appear in the source article text, otherwise the point is dropped.
    - Grounding check: at least 70% of a summary point's content words must appear in its cited articles or cards, otherwise the point is dropped. Live runs showed invented claims scoring 0.50-0.62 and news-based points 0.64-1.00.
+   - Evidence check (cards): every relevant card must carry `evidence`, a short passage the model copies word for word from the article. At least 60% of its 5-word sequences must appear in the article, otherwise the card is dropped. The card's own summary must also pass the grounding and question-term checks. The UI shows the quote under "From the article", and the reason as "Why (analysis)".
+   - The impact model does not get the user's question, so it cannot tie every article to it.
+   - Question-term check: a summary point must not contain a word from the question or the search queries that its cited sources do not contain (the question is not a source). Example: a point about "crude oil and coal" is dropped when the cited article never mentions them.
+   - The grounding vocabulary is the article text plus the card's summary of it. The card's "reason" is the model's inference and does not count as a source.
    - Enum values are checked.
 6. The summarizer only receives validated cards, never raw web text.
 
@@ -157,6 +162,7 @@ Request limits: `question` 1-500 characters, `topic` must be one of the known to
 | Wrong "today/yesterday" timezone | All date logic in IST |
 | Keys leak | Keys only in `.env`, `.env` is gitignored, never print keys in logs |
 | Windows blocks `uuid_utils` | LangChain stack pinned below `langchain-core` 0.3.70 |
+| Bedrock throttling (seen with Nova Pro) | botocore adaptive retries (8 attempts), max 3 parallel impact calls, a pause before retrying failed articles |
 
 ---
 

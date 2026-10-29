@@ -31,24 +31,26 @@ Competitors: {", ".join(profile.COMPETITORS)}.
 Rules:
 - Use ONLY the article text given. Never use outside knowledge.
 - Never write a number, name, date or fact that is not in the article text. Never write URLs.
-- relevant: true only if the article can affect this business (its costs, demand, policy, competitors or the markets it depends on). Otherwise false.
+- evidence: copy ONE short passage (max 30 words) word for word from the article text that shows a link to this business (its products, costs, demand, a policy or tariff that applies to it, a listed competitor, or one of its dependencies). Use an empty string if there is no such passage. Do not paraphrase.
+- relevant: true only if the evidence is not empty and shows the article can affect this business. If the evidence is empty, relevant must be false.
 - Only the competitors listed above are competitors. A different company, even from the same group, is not relevant unless the article shows a direct effect on this business.
-- Do not stretch. If you cannot point to a concrete fact in the text that links to the business, set relevant=false. If your reason would say the article does not address the topic, relevant must be false.
-- summary: 1-2 sentences of what the article says.
+- summary: 1-2 sentences of what the article itself says. Do not mention this business in the summary.
+- reason: ONE short sentence on how the evidence could affect this business. Use "may" or "could" for effects. Never claim the article says something it does not.
 - sentiment: positive, negative or neutral for THIS business (a competitor's gain is usually negative).
-- level: high, medium or low impact.
-- reason: ONE short sentence on why, based only on the article.
+- level: high only if the article is directly about this business's products, a listed competitor, or a policy or tariff that applies to it; medium if it is about one of the dependencies (for example crude oil, coal or power prices, import prices); low if the link is indirect.
 - horizon: short (within about 3 months) or long.
 - If the article is not relevant, still fill every field briefly."""
 
 SUMMARY_SYSTEM = f"""You write a short summary for the owner of this business: {profile.BUSINESS}, {profile.LOCATION}.
 
 Rules:
-- Write up to 5 points, each one sentence. Write fewer points when the items say little; never pad.
-- Each point restates a specific fact from the cited item(s), staying close to the item's own wording, then what it means for the business using that item's impact and why fields.
+- Write 1 to 5 points, each one sentence, about what the items say. Do this even when the items do not answer the question (direct_item_ids tells the reader that). Write fewer points when the items say little; never pad.
+- Each point restates a specific fact from the cited item(s), staying close to the item's own wording. Report only what the items say.
+- Do not explain what a fact means for the business, do not predict effects, and do not link a fact to the business's costs or profits unless the item itself says so. The impact analysis is shown separately.
 - The question is NOT a source. Never present something from the question as a fact (for example, do not say prices rose or costs will rise unless a cited item says so).
 - Never give advice or recommendations (no "should", "must consider", "needs to").
 - Every point must list at least one source ID. A point you cannot support with an item must not be written.
+- direct_item_ids: list the IDs of the items whose own text connects the question's subject to the business (for example, an item that says crude oil or coal prices affect solar module costs), or that is about the company named in the question. Items that only report on the subject in general (for example a global oil market report) or are about solar manufacturing or policy in general do NOT count. Use an empty list if no item does. Fill this in first, before the points.
 - Use ONLY the news items given. Never add a fact, number, name or date that is not in them.
 - Every point lists source_ids: the IDs, in brackets, of the news items it relies on. Use only IDs that were given.
 - Never write URLs.
@@ -60,9 +62,7 @@ SUMMARY_USER = """Question: {question}
 News items:
 {items}"""
 
-IMPACT_USER = """Question the user asked: {question}
-
-Article:
+IMPACT_USER = """Article:
 Title: {title}
 Date: {date}
 Text: {content}"""

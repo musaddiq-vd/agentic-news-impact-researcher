@@ -75,6 +75,25 @@ def test_list_runs_newest_first_and_limit(db):
     assert runs[0]["question"] == "q2" and runs[0]["status"] == "ok" and runs[0]["created_at"]
 
 
+def test_evidence_is_saved_and_read_back(db):
+    r = ok_result()
+    r["cards"] = [card(1, evidence="Duty is 40 percent"), card(2)]
+    qid = save_run("q", None, [], r, path=db)
+    assert get_run(qid, path=db).cards[0].evidence == "Duty is 40 percent"
+
+
+def test_old_db_without_evidence_column_is_migrated(db):
+    with sqlite3.connect(db) as conn:  # the schema before the evidence column existed
+        conn.executescript(
+            "CREATE TABLE impacts (id INTEGER PRIMARY KEY AUTOINCREMENT, article_id INTEGER NOT NULL,"
+            " relevant INTEGER NOT NULL, summary TEXT NOT NULL, sentiment TEXT NOT NULL,"
+            " level TEXT NOT NULL, reason TEXT NOT NULL, horizon TEXT NOT NULL);"
+        )
+    conn.close()
+    qid = save_run("q", None, [], ok_result(), path=db)
+    assert len(get_run(qid, path=db).cards) == 2
+
+
 def test_get_missing_id_returns_none(db):
     assert get_run(999, path=db) is None
 

@@ -1,5 +1,12 @@
+import pytest
+
 from app.nodes.impact_analyzer import MAX_CONTENT_CHARS, ImpactOutput, analyze_impacts
 from app.schemas import Article
+
+
+@pytest.fixture(autouse=True)
+def no_retry_delay(monkeypatch):
+    monkeypatch.setattr("app.nodes.impact_analyzer.RETRY_DELAY_SECONDS", 0)
 
 
 def article(i, content="Coal prices rose."):
@@ -38,12 +45,24 @@ def test_builds_cards_with_code_set_ids():
     assert [c.relevant for c in cards] == [True, False]
 
 
-def test_prompt_has_article_text_and_question_only():
+def test_prompt_has_article_text_only():
     llm = FakeLLM([[output()]])
     analyze_impacts("my question", [article(1, content="Specific body text.")], llm=llm)
     user_msg = llm.inputs[0][0][1][1]
-    assert "my question" in user_msg and "Specific body text." in user_msg
+    assert "Specific body text." in user_msg
+    assert "my question" not in user_msg  # the question made the model tie every article to it
     assert "https://s.com/1" not in user_msg  # LLM never sees URLs
+
+
+def test_evidence_is_passed_to_the_card():
+    llm = FakeLLM([[output(evidence="Coal prices rose")]])
+    cards = analyze_impacts("q", [article(1)], llm=llm)
+    assert cards[0].evidence == "Coal prices rose"
+
+
+def test_irrelevant_output_may_skip_evidence():
+    out = ImpactOutput(relevant=False, summary="s", reason="r")
+    assert out.evidence == ""
 
 
 def test_truncates_long_content():
@@ -73,12 +92,17 @@ def test_irrelevant_output_may_skip_fields():
     assert (out.sentiment, out.level, out.horizon) == ("neutral", "low", "long")
 
 
-def test_relevant_output_must_have_level():
-    import pytest
+def test_relevant_output_without_level_gets_the_cautious_low():
+    # A live run lost a relevant card because the model left out "level" three times.
+    out = ImpactOutput(relevant=True, summary="s", sentiment="negative", reason="r", horizon="short")
+    assert out.level == "low"
+
+
+def test_relevant_output_still_needs_sentiment_and_horizon():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        ImpactOutput(relevant=True, summary="s", sentiment="negative", reason="r", horizon="short")
+        ImpactOutput(relevant=True, summary="s", reason="r", level="high")
 
 
 def test_no_articles_makes_no_call():

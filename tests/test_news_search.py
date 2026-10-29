@@ -64,6 +64,21 @@ def test_continues_when_one_query_fails():
     assert len(search_news(["bad", "good"], tool=tool, now=NOW)) == 1
 
 
+def test_error_response_is_retried_and_logged_with_its_cause(caplog):
+    class ErrorTool:
+        calls = 0
+
+        def invoke(self, args):
+            ErrorTool.calls += 1
+            return {"error": "connection refused by host"}
+
+    caplog.set_level("WARNING", logger="app.nodes.news_search")
+    with pytest.raises(SearchError):
+        search_news(["q"], tool=ErrorTool(), now=NOW)
+    assert ErrorTool.calls == 2  # first try + 1 retry
+    assert "connection refused by host" in caplog.text
+
+
 def test_raises_when_all_queries_fail():
     tool = FakeTool([RuntimeError("x")] * 2)
     with pytest.raises(SearchError):
