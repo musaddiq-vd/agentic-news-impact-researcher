@@ -51,7 +51,7 @@ What happens on an error or an empty result:
 - **query_builder fails:** the user's question itself becomes the query (fallback); the flow continues.
 - **Tavily error / timeout:** 1 retry. If it still fails: `status=error`, message "Search is not available right now".
 - **0 news (after search or filter):** `no_news`, message "No relevant news found for this topic in the last 30 days."
-- **Invalid impact JSON:** 1 retry for that article, then drop that card. Other cards continue.
+- **Invalid impact JSON:** retried for that article, then that card is dropped. Other cards continue. If every article fails, the result is `status=error` (not `no_news`).
 - **Summarizer fails:** the summary stays empty, cards are still shown (`status=ok`, message "Summary could not be generated").
 - **0 points after the validator:** same as the summarizer-failure case above.
 
@@ -165,7 +165,7 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 5. **news_search** ✅: Test: mocked Tavily (fixture), then one real query by hand.
 6. **impact_analyzer** ✅: Test: 2 fixture articles (one relevant, one not) → schema-valid cards, irrelevant one has `relevant=false`.
 7. **summarizer** ✅: Test: fixture cards → points with valid `source_ids`.
-8. **graph.py:** Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
+8. **graph.py** ✅: Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
 9. **db.py:** Test: in-memory SQLite save → list → get.
 10. **api.py:** Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
 11. **streamlit_app.py:** Manual: start the API, ask the 5 REQUIREMENTS test questions, check the format.
