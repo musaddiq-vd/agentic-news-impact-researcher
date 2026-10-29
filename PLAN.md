@@ -86,7 +86,8 @@ tests/
 
 ## 4. Tavily search
 - **Query:** `query_builder` adds business context to each query (e.g. "solar module India", competitor name, "Maharashtra" only for state questions). Max 4 queries, 5-8 results per query.
-- **Call:** `topic="news"`, `days=30`, `search_depth="basic"`, `max_results=8`. India-focused query text.
+- **Call:** `topic="news"`, `start_date`/`end_date` (today-30 to today, IST; the Tavily tool has no `days` field), `search_depth="basic"`, `max_results=8`. India-focused query text.
+- **Failures:** each query is retried once. The search fails only if every query fails; otherwise results from the other queries are used.
 - **30-day filter (re-checked in code):** parse `published_date` (IST). Drop it if the date is missing or unparseable, or older than 30 days.
 - **Priority:**
   1. `is_today_or_yesterday` (IST) news first.
@@ -161,7 +162,7 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 2. **filter_rank (pure code)** ✅: Test: fixture articles (today, yesterday, 10 days, 40 days, undated) → correct order and drops.
 3. **validator (pure code)** ✅: Test: wrong source_id, invented number, bad enum → dropped.
 4. **llm.py + query_builder** ✅: Test: mocked LLM tests plus one real Bedrock call (Nova Micro).
-5. **news_search:** Test: mocked Tavily (fixture), then one real query by hand.
+5. **news_search** ✅: Test: mocked Tavily (fixture), then one real query by hand.
 6. **impact_analyzer:** Test: 2 fixture articles (one relevant, one not) → schema-valid cards, irrelevant one has `relevant=false`.
 7. **summarizer:** Test: fixture cards → points with valid `source_ids`.
 8. **graph.py:** Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
