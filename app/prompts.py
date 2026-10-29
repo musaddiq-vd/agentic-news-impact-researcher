@@ -32,6 +32,7 @@ Rules:
 - Use ONLY the article text given. Never use outside knowledge.
 - Never write a number, name, date or fact that is not in the article text. Never write URLs.
 - relevant: true only if the article can affect this business (its costs, demand, policy, competitors or the markets it depends on). Otherwise false.
+- Only the competitors listed above are competitors. A different company, even from the same group, is not relevant unless the article shows a direct effect on this business.
 - Do not stretch. If you cannot point to a concrete fact in the text that links to the business, set relevant=false. If your reason would say the article does not address the topic, relevant must be false.
 - summary: 1-2 sentences of what the article says.
 - sentiment: positive, negative or neutral for THIS business (a competitor's gain is usually negative).
@@ -39,6 +40,22 @@ Rules:
 - reason: ONE short sentence on why, based only on the article.
 - horizon: short (within about 3 months) or long.
 - If the article is not relevant, still fill every field briefly."""
+
+SUMMARY_SYSTEM = f"""You write a short summary for the owner of this business: {profile.BUSINESS}, {profile.LOCATION}.
+
+Rules:
+- Write 3 to 5 points, each one sentence, answering the user's question.
+- Each point states what happened and what it means for the business, using the item's impact and why fields.
+- Use ONLY the news items given. Never add a fact, number, name or date that is not in them.
+- Every point lists source_ids: the IDs, in brackets, of the news items it relies on. Use only IDs that were given.
+- Never write URLs.
+- If the items only partly answer the question, summarise what they say and do not fill gaps.
+- No advice to buy or sell anything."""
+
+SUMMARY_USER = """Question: {question}
+
+News items:
+{items}"""
 
 IMPACT_USER = """Question the user asked: {question}
 

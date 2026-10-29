@@ -164,7 +164,7 @@ Saving happens in one place only: `api.py` calls `db.save_run()` after the graph
 4. **llm.py + query_builder** ✅: Test: mocked LLM tests plus one real Bedrock call (Nova Micro).
 5. **news_search** ✅: Test: mocked Tavily (fixture), then one real query by hand.
 6. **impact_analyzer** ✅: Test: 2 fixture articles (one relevant, one not) → schema-valid cards, irrelevant one has `relevant=false`.
-7. **summarizer:** Test: fixture cards → points with valid `source_ids`.
+7. **summarizer** ✅: Test: fixture cards → points with valid `source_ids`.
 8. **graph.py:** Test: mocked nodes for all three paths (ok / no_news / error), then one real end-to-end run from the CLI.
 9. **db.py:** Test: in-memory SQLite save → list → get.
 10. **api.py:** Test: FastAPI TestClient for `/health`, `/ask` (graph mocked), `/history`.
