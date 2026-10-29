@@ -19,7 +19,7 @@ class FakeLLM:
 
 def test_returns_llm_queries():
     llm = FakeLLM(["solar module price India", "polysilicon price"])
-    assert build_queries("module ka rate?", llm=llm) == [
+    assert build_queries("what is the module price?", llm=llm) == [
         "solar module price India", "polysilicon price",
     ]
 
@@ -33,7 +33,7 @@ def test_prompt_includes_question_topic_competitors():
 
 def test_falls_back_to_question_on_error():
     llm = FakeLLM(error=RuntimeError("bedrock down"))
-    assert build_queries("crude oil asar?", llm=llm) == ["crude oil asar?"]
+    assert build_queries("crude oil impact?", llm=llm) == ["crude oil impact?"]
 
 
 def test_falls_back_when_llm_returns_nothing():

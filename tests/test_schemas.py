@@ -31,7 +31,7 @@ def test_article_rejects_bad_date():
     with pytest.raises(ValidationError):
         Article(
             id=1, title="t", url="u", source="s",
-            published_date="kal", content="c", is_today_or_yesterday=True,
+            published_date="yesterday", content="c", is_today_or_yesterday=True,
         )
 
 
@@ -60,5 +60,5 @@ def test_ask_request_rejects_empty_question():
 
 
 def test_ask_response_no_news():
-    r = AskResponse(query_id=1, status="no_news", message="koi relevant news nahi mili")
+    r = AskResponse(query_id=1, status="no_news", message="No relevant news found")
     assert r.cards == [] and r.summary == []
