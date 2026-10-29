@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+# LangChain stack pinned below langchain-core 0.3.70: newer versions need uuid_utils,
+# whose DLL is blocked by Windows Application Control on this machine.
+langchain-core>=0.3.60,<0.3.70
+langchain>=0.3.25,<0.4
+langchain-aws>=0.2.24,<0.3
+langgraph>=0.4,<0.5
+langsmith<0.4
+langchain-tavily
+streamlit
+pydantic>=2
+python-dotenv
+pytest
+httpx
