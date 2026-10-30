@@ -33,6 +33,7 @@ If no news is found, the flow stops with "No relevant news found".
 ```
 app/
   config.py        settings from .env
+  .env.example     add your api keys and config in this 
   profile.py       business profile and competitors
   schemas.py       data models
   llm.py           Bedrock model setup
