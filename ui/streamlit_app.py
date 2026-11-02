@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,13 +14,75 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # makes `app` importable
 
 from app.config import IST  # noqa: E402
-from app.profile import COMPETITORS, TOPICS  # noqa: E402
+from app.profile import BUSINESS, DEPENDENCIES, LOCATION, PRODUCTS, TOPICS  # noqa: E402
 
 load_dotenv()
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 REQUEST_TIMEOUT = 150  # /ask can take up to a minute or two
 
+# The competitor filter is not shown in the UI.
+UI_TOPICS = [t for t in TOPICS if t != "competitor"]
+
 SENTIMENT_COLOR = {"positive": "green", "negative": "red", "neutral": "gray"}
+SENTIMENT_HEX = {"positive": "#16a34a", "negative": "#dc2626", "neutral": "#94a3b8"}
+SENTIMENT_ICON = {"positive": "📈", "negative": "📉", "neutral": "➖"}
+LEVEL_RANK = {"high": 0, "medium": 1, "low": 2}
+LEVEL_HEX = {"high": "#ea580c", "medium": "#f59e0b", "low": "#fcd34d"}
+HORIZON_HEX = {"short": "#0ea5e9", "long": "#6366f1"}
+
+EXAMPLE_QUESTIONS = [
+    "How will rising coal prices affect my module production cost?",
+    "Koi nayi solar policy aayi hai kya jo mere business ko affect kare?",
+    "What is happening with polysilicon import prices?",
+    "How are solar sector stocks doing this month?",
+]
+
+CSS = """
+<style>
+.block-container { padding-top: 3.5rem; max-width: 1100px; }
+
+.st-key-hero {
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 60%, #facc15 100%);
+  border-radius: 20px; padding: 1.6rem 1.9rem 1.2rem;
+  box-shadow: 0 10px 30px rgba(234, 88, 12, .25);
+}
+.st-key-hero h1 { color: #fff !important; padding: 0 !important; letter-spacing: -.5px; }
+.st-key-hero p, .st-key-hero [data-testid="stCaptionContainer"] { color: #fff !important; opacity: 1; font-size: .95rem; }
+.hero-eyebrow {
+  display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: #fff; background: rgba(255, 255, 255, .22);
+  padding: .2rem .65rem; border-radius: 999px;
+}
+
+[data-testid="stMetric"] {
+  background: rgba(245, 158, 11, .07); border: 1px solid rgba(245, 158, 11, .25);
+  border-radius: 14px; padding: .75rem 1rem;
+}
+
+.st-key-summary {
+  background: rgba(250, 204, 21, .08); border: 1px solid rgba(245, 158, 11, .3);
+  border-radius: 16px; padding: 1rem 1.3rem;
+}
+
+div[class*="st-key-card-"] { border-radius: 14px; transition: transform .15s ease, box-shadow .15s ease; }
+div[class*="st-key-card-"]:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0, 0, 0, .08); }
+div[class*="st-key-card-positive"] { border-left: 6px solid #16a34a !important; }
+div[class*="st-key-card-negative"] { border-left: 6px solid #dc2626 !important; }
+div[class*="st-key-card-neutral"]  { border-left: 6px solid #94a3b8 !important; }
+div[class*="st-key-card-"] blockquote {
+  border-left: 3px solid #f59e0b; margin: .2rem 0 .4rem; padding: .3rem .8rem;
+  background: rgba(245, 158, 11, .07); border-radius: 0 8px 8px 0;
+}
+
+.split-label { font-size: .85rem; font-weight: 600; margin: .6rem 0 .25rem; opacity: .85; }
+.split-bar { display: flex; height: 16px; border-radius: 999px; overflow: hidden; background: rgba(128,128,128,.15); }
+.split-bar span { display: block; height: 100%; }
+.split-legend { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .8rem; margin-top: .35rem; opacity: .9; }
+.split-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: .3rem; }
+
+.status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: .4rem; }
+</style>
+"""
 
 
 def call_api(method: str, path: str, **kwargs) -> tuple[object | None, str | None]:
@@ -33,10 +96,17 @@ def call_api(method: str, path: str, **kwargs) -> tuple[object | None, str | Non
     if r.status_code == 404:
         return None, "Not found."
     if r.status_code == 422:
-        return None, "Invalid input. Check the question, topic and competitors."
+        return None, "Invalid input. Check the question and topic."
     if r.status_code >= 400:
         return None, f"Server error ({r.status_code}). Please try again."
     return r.json(), None
+
+
+def api_online() -> bool:
+    try:
+        return httpx.request("GET", API_URL + "/health", timeout=3).status_code == 200
+    except httpx.HTTPError:
+        return False
 
 
 def age_label(published: date, today: date) -> str | None:
@@ -54,7 +124,103 @@ def _md(text: str) -> str:
     return text.replace("$", "\\$")
 
 
-def render_result(data: dict) -> None:
+def _count(cards: list[dict], field: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for c in cards:
+        out[c[field]] = out.get(c[field], 0) + 1
+    return out
+
+
+def split_bar(label: str, counts: dict[str, int], colors: dict[str, str]) -> str:
+    """A single stacked bar with a legend, as HTML."""
+    total = sum(counts.values()) or 1
+    parts = "".join(
+        f'<span style="width:{counts.get(k, 0) / total * 100:.1f}%;background:{c}"></span>' for k, c in colors.items()
+    )
+    legend = "".join(f'<span><i style="background:{c}"></i>{k} · {counts.get(k, 0)}</span>' for k, c in colors.items())
+    return (
+        f'<div class="split-label">{label}</div><div class="split-bar">{parts}</div>'
+        f'<div class="split-legend">{legend}</div>'
+    )
+
+
+def report_markdown(data: dict, question: str | None) -> str:
+    """Plain Markdown report of one result, for download."""
+    lines = ["# News Impact Report", ""]
+    if question:
+        lines += [f"**Question:** {question}", ""]
+    lines += [f"_Generated {datetime.now(IST).strftime('%d %b %Y, %H:%M')} IST_", ""]
+    if data.get("summary"):
+        lines += ["## Summary", ""]
+        for p in data["summary"]:
+            links = " ".join(f"[{_domain(u)}]({u})" for u in p["sources"])
+            lines.append(f"- {p['text']} {links}")
+        lines.append("")
+    if data.get("cards"):
+        lines += ["## News impact", ""]
+        for c in data["cards"]:
+            lines += [
+                f"### [{c['title']}]({c['url']})",
+                f"{c['source']} · {c['published_date']} · **{c['sentiment']}** · {c['level']} impact · {c['horizon']} term",
+                "",
+                c["summary"],
+                "",
+            ]
+            if c.get("evidence"):
+                lines += [f"> {c['evidence']}", ""]
+            lines += [f"**Why:** {c['reason']}", ""]
+    return "\n".join(lines)
+
+
+def render_card(c: dict, i: int, today: date) -> None:
+    with st.container(border=True, key=f"card-{c['sentiment']}-{i}"):
+        st.markdown(f"**[{_md(c['title'])}]({c['url']})**")
+        published = date.fromisoformat(c["published_date"])
+        st.caption(f"🌐 {c['source']} · 📅 {published.strftime('%d %b %Y')}")
+        badges = [
+            f":{SENTIMENT_COLOR[c['sentiment']]}-badge[{c['sentiment']}]",
+            f":blue-badge[{c['level']} impact]",
+            f":gray-badge[{c['horizon']} term]",
+        ]
+        fresh = age_label(published, today)
+        if fresh:
+            badges.append(f":orange-badge[{fresh}]")
+        st.markdown(f"{SENTIMENT_ICON[c['sentiment']]} " + " ".join(badges))
+        st.write(_md(c["summary"]))
+        if c.get("evidence"):
+            st.markdown(f"> **From the article:** “{_md(c['evidence'])}”")
+        st.markdown(f"💡 **Why (analysis):** {_md(c['reason'])}")
+
+
+def render_cards(cards: list[dict], key: str) -> None:
+    """Impact cards with sentiment / level filters and sorting."""
+    f1, f2, f3 = st.columns([4, 3, 2])
+    sentiments = f1.pills(
+        "Sentiment", list(SENTIMENT_COLOR), selection_mode="multi",
+        default=list(SENTIMENT_COLOR), key=f"{key}-sent",
+    )
+    levels = f2.pills(
+        "Impact level", list(LEVEL_RANK), selection_mode="multi",
+        default=list(LEVEL_RANK), key=f"{key}-level",
+    )
+    sort = f3.selectbox("Sort by", ["Relevance", "Newest", "Highest impact"], key=f"{key}-sort")
+
+    shown = [c for c in cards if c["sentiment"] in sentiments and c["level"] in levels]
+    if sort == "Newest":
+        shown.sort(key=lambda c: c["published_date"], reverse=True)
+    elif sort == "Highest impact":
+        shown.sort(key=lambda c: LEVEL_RANK[c["level"]])
+
+    if not shown:
+        st.info("No cards match these filters.")
+        return
+    st.caption(f"Showing {len(shown)} of {len(cards)} articles")
+    today = datetime.now(IST).date()
+    for i, c in enumerate(shown):
+        render_card(c, i, today)
+
+
+def render_result(data: dict, key: str = "ask", question: str | None = None) -> None:
     status = data["status"]
     if status == "error":
         st.error(data.get("message") or "Something went wrong.")
@@ -65,91 +231,158 @@ def render_result(data: dict) -> None:
     if data.get("message"):
         st.warning(data["message"])
 
-    if data["summary"]:
-        st.subheader("Summary")
-        for p in data["summary"]:
-            links = " ".join(f"[[{_domain(u)}]]({u})" for u in p["sources"])
-            st.markdown(f"- {_md(p['text'])} {links}")
-
-    st.subheader("News impact")
+    cards = data["cards"]
+    sent = _count(cards, "sentiment")
+    levels = _count(cards, "level")
     today = datetime.now(IST).date()
-    for c in data["cards"]:
-        with st.container(border=True):
-            st.markdown(f"**[{_md(c['title'])}]({c['url']})**")
-            published = date.fromisoformat(c["published_date"])
-            st.caption(f"{c['source']} · {published.isoformat()}")
-            badges = [
-                f":{SENTIMENT_COLOR[c['sentiment']]}-badge[{c['sentiment']}]",
-                f":blue-badge[{c['level']} impact]",
-                f":gray-badge[{c['horizon']} term]",
-            ]
-            fresh = age_label(published, today)
-            if fresh:
-                badges.append(f":orange-badge[{fresh}]")
-            st.markdown(" ".join(badges))
-            st.write(_md(c["summary"]))
-            if c.get("evidence"):
-                st.markdown(f"**From the article:** “{_md(c['evidence'])}”")
-            st.markdown(f"**Why (analysis):** {_md(c['reason'])}")
+    fresh = sum(1 for c in cards if age_label(date.fromisoformat(c["published_date"]), today))
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📰 Articles", len(cards))
+    m2.metric("📈 Positive", sent.get("positive", 0))
+    m3.metric("📉 Negative", sent.get("negative", 0))
+    m4.metric("🔥 High", levels.get("high", 0), help=f"{fresh} from today or yesterday")
+
+    if data["summary"]:
+        with st.container(key="summary"):
+            st.subheader("✨ Summary")
+            for p in data["summary"]:
+                links = " ".join(f"[[{_domain(u)}]]({u})" for u in p["sources"])
+                st.markdown(f"- {_md(p['text'])} {links}")
+
+    if cards:
+        with st.expander("📊 Impact breakdown", expanded=True):
+            st.markdown(
+                split_bar("Sentiment", sent, SENTIMENT_HEX)
+                + split_bar("Impact level", levels, LEVEL_HEX)
+                + split_bar("Time horizon", _count(cards, "horizon"), HORIZON_HEX),
+                unsafe_allow_html=True,
+            )
+
+    st.subheader("🗞️ News impact")
+    render_cards(cards, key)
+
+    st.download_button(
+        "⬇️ Download report (.md)",
+        report_markdown(data, question),
+        file_name=f"news-impact-{data.get('query_id', 'report')}.md",
+        mime="text/markdown",
+        key=f"{key}-download",
+    )
+
+
+def _use_example() -> None:
+    picked = st.session_state.get("example")
+    if picked:
+        st.session_state["question"] = picked
 
 
 def ask_page() -> None:
-    st.title("News Impact")
-    st.caption("Ask about your business. Answers use only news from the last 30 days, with source links.")
+    with st.container(key="hero"):
+        st.markdown('<span class="hero-eyebrow">☀️ Solar business radar</span>', unsafe_allow_html=True)
+        st.title("News Impact")
+        st.caption("Ask about your business. Answers use only news from the last 30 days, with source links.")
+
+    st.pills("💡 Try an example", EXAMPLE_QUESTIONS, key="example", on_change=_use_example)
+
     with st.form("ask"):
         question = st.text_area(
             "Your question",
             max_chars=500,
-            height=100,
+            height=110,
+            key="question",
             placeholder="e.g. How will rising coal prices affect my module production cost?",
         )
-        topic = st.selectbox("Topic", TOPICS)
-        competitors = st.multiselect("Competitors (optional)", COMPETITORS)
-        submitted = st.form_submit_button("Ask")
+        topic = st.selectbox("Topic", UI_TOPICS)
+        submitted = st.form_submit_button("🔍 Analyse impact", type="primary", use_container_width=True)
 
     if submitted:
         if not question.strip():
             st.warning("Please type a question.")
             return
+        start = time.monotonic()
         with st.spinner("Searching news and analysing impact. This can take up to a minute..."):
-            data, err = call_api(
-                "POST", "/ask",
-                json={"question": question, "topic": topic, "competitors": competitors},
-            )
+            data, err = call_api("POST", "/ask", json={"question": question, "topic": topic, "competitors": []})
         if err:
             st.session_state.pop("last", None)
             st.error(err)
             return
         st.session_state["last"] = data
+        st.session_state["last_question"] = question.strip()
+        st.session_state["last_seconds"] = time.monotonic() - start
 
     if "last" in st.session_state:
-        render_result(st.session_state["last"])
+        seconds = st.session_state.get("last_seconds")
+        if submitted and seconds:
+            st.toast(f"Done in {seconds:.0f}s", icon="✅")
+        render_result(st.session_state["last"], "ask", st.session_state.get("last_question"))
+
+
+def _ask_again(question: str) -> None:
+    st.session_state["page"] = "Ask"
+    st.session_state["question"] = question
+    st.session_state.pop("last", None)
 
 
 def history_page() -> None:
-    st.title("History")
-    items, err = call_api("GET", "/history", params={"limit": 20})
+    st.title("🕘 History")
+    items, err = call_api("GET", "/history", params={"limit": 50})
     if err:
         st.error(err)
         return
     if not items:
         st.info("No questions yet.")
         return
+
+    status_icon = {"ok": "✅", "no_news": "📭", "error": "⚠️"}
+    search = st.text_input("Search past questions", placeholder="Type to filter...", key="history-search")
+    if search.strip():
+        items = [i for i in items if search.strip().lower() in i["question"].lower()]
+        if not items:
+            st.info("No past questions match your search.")
+            return
+
     labels = {
-        i["query_id"]: f"{i['created_at'][:16].replace('T', ' ')} · {i['status']} · {i['question'][:80]}"
+        i["query_id"]: f"{status_icon.get(i['status'], '•')} {i['created_at'][:16].replace('T', ' ')} · {i['question'][:80]}"
         for i in items
     }
     query_id = st.selectbox("Past questions", list(labels), format_func=labels.get)
+    question = next(i["question"] for i in items if i["query_id"] == query_id)
+
     run, err = call_api("GET", f"/history/{query_id}")
     if err:
         st.error(err)
         return
-    render_result(run)
+
+    c1, c2 = st.columns([5, 1.4], vertical_alignment="center")
+    c1.markdown(f"#### “{_md(question)}”")
+    c2.button("🔁 Ask again", on_click=_ask_again, args=(question,), use_container_width=True)
+    render_result(run, f"history-{query_id}", question)
+
+
+def sidebar() -> str:
+    with st.sidebar:
+        st.markdown("## ☀️ News Impact")
+        st.caption("AI agents that read the news for your solar business.")
+        page = st.radio("Page", ["Ask", "History"], key="page", format_func={"Ask": "🔍 Ask", "History": "🕘 History"}.get)
+        st.divider()
+
+        online = api_online()
+        color, text = ("#16a34a", "API online") if online else ("#dc2626", "API offline")
+        st.markdown(f'<span class="status-dot" style="background:{color}"></span>{text}', unsafe_allow_html=True)
+
+        with st.expander("🏭 Business profile"):
+            st.markdown(f"**{BUSINESS}**  \n📍 {LOCATION}")
+            st.markdown("**Products**\n" + "\n".join(f"- {p}" for p in PRODUCTS))
+            st.markdown("**Watching**\n" + "\n".join(f"- {d}" for d in DEPENDENCIES))
+        st.caption("News window: last 30 days · Sources linked on every point")
+    return page
 
 
 def main() -> None:
-    st.set_page_config(page_title="News Impact", page_icon="📰")
-    page = st.sidebar.radio("Page", ["Ask", "History"])
+    st.set_page_config(page_title="News Impact", page_icon="☀️", layout="wide")
+    st.markdown(CSS, unsafe_allow_html=True)
+    page = sidebar()
     # A plain if/else: a bare expression would make Streamlit print its value ("None").
     if page == "Ask":
         ask_page()

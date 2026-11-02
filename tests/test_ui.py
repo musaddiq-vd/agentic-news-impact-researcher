@@ -39,6 +39,10 @@ class FakeApi:
         self.calls = []
 
     def __call__(self, method, url, **kw):
+        if url.endswith("/health"):  # sidebar status check, not counted as a call
+            if self.error:
+                raise self.error
+            return httpx.Response(200, json={"status": "ok"}, request=httpx.Request(method, url))
         self.calls.append((method, url, kw.get("json")))
         if self.error:
             raise self.error
@@ -172,3 +176,31 @@ def test_history_empty_and_api_down(monkeypatch):
 def test_age_label(days, label):
     today = date(2026, 10, 29)
     assert age_label(today - timedelta(days=days), today) == label
+
+
+def test_competitor_filter_is_not_shown(monkeypatch):
+    monkeypatch.setattr(httpx, "request", FakeApi())
+    at = AppTest.from_file(APP, default_timeout=15).run()
+    assert not at.multiselect
+    assert "competitor" not in at.selectbox[0].options
+
+
+def test_metrics_and_sentiment_filter(monkeypatch):
+    cards = [card(title="Good news"), card(title="Bad news", sentiment="negative")]
+    at = run_ask(monkeypatch, FakeApi(ask=result(cards=cards)))
+    assert [m.value for m in at.metric] == ["2", "1", "1", "2"]
+    at.button_group[1].set_value(["negative"]).run()  # [0] is the example pills
+    md = texts(at.markdown)
+    assert "Bad news" in md and "Good news" not in md
+
+
+def test_history_ask_again_prefills_question(monkeypatch):
+    api = FakeApi(
+        history=[{"query_id": 7, "question": "Old question", "status": "ok", "created_at": "2026-10-29T19:30:59+05:30"}],
+        runs={7: result()},
+    )
+    monkeypatch.setattr(httpx, "request", api)
+    at = AppTest.from_file(APP, default_timeout=15).run()
+    at.sidebar.radio[0].set_value("History").run()
+    next(b for b in at.button if "Ask again" in b.label).click().run()
+    assert at.text_area[0].value == "Old question"
