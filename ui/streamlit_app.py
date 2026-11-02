@@ -1,5 +1,6 @@
 """Streamlit UI. Talks only to the FastAPI backend; never touches the graph or the DB."""
 
+import json
 import os
 import sys
 import time
@@ -15,13 +16,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # makes `app` i
 
 from app.config import IST  # noqa: E402
 from app.profile import BUSINESS, DEPENDENCIES, LOCATION, PRODUCTS, TOPICS  # noqa: E402
+from ui import board as agent_board  # noqa: E402
+from ui.trends_view import trends_page  # noqa: E402
+
+PAGES = {"Ask": "🔍 Ask", "Trends": "📈 Trends", "History": "🕘 History"}
 
 load_dotenv()
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 REQUEST_TIMEOUT = 150  # /ask can take up to a minute or two
-
-# The competitor filter is not shown in the UI.
-UI_TOPICS = [t for t in TOPICS if t != "competitor"]
 
 SENTIMENT_COLOR = {"positive": "green", "negative": "red", "neutral": "gray"}
 SENTIMENT_HEX = {"positive": "#16a34a", "negative": "#dc2626", "neutral": "#94a3b8"}
@@ -64,6 +66,11 @@ CSS = """
   border-radius: 16px; padding: 1rem 1.3rem;
 }
 
+div[class*="st-key-chat-"] {
+  border: 1px solid rgba(99, 102, 241, .25); background: rgba(99, 102, 241, .04);
+  border-radius: 18px; padding: 1rem 1.2rem; margin-top: 1rem;
+}
+
 div[class*="st-key-card-"] { border-radius: 14px; transition: transform .15s ease, box-shadow .15s ease; }
 div[class*="st-key-card-"]:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0, 0, 0, .08); }
 div[class*="st-key-card-positive"] { border-left: 6px solid #16a34a !important; }
@@ -93,13 +100,45 @@ def call_api(method: str, path: str, **kwargs) -> tuple[object | None, str | Non
         return None, "The API is not running. Start it with: uvicorn app.api:app"
     except httpx.TimeoutException:
         return None, "The request timed out. Please try again."
-    if r.status_code == 404:
-        return None, "Not found."
-    if r.status_code == 422:
-        return None, "Invalid input. Check the question and topic."
+    if r.status_code in (409, 502):  # the API's own message is meant for the user
+        try:
+            return None, r.json()["detail"]
+        except Exception:
+            pass
     if r.status_code >= 400:
-        return None, f"Server error ({r.status_code}). Please try again."
+        return None, _http_error(r.status_code)
     return r.json(), None
+
+
+def _http_error(code: int) -> str:
+    if code == 404:
+        return "Not found."
+    if code == 422:
+        return "Invalid input. Check the question and topic."
+    return f"Server error ({code}). Please try again."
+
+
+def stream_ask(payload: dict, on_event) -> tuple[dict | None, str | None]:
+    """POST /ask/stream: calls on_event(ev) for every agent event, returns (result, error)."""
+    try:
+        with httpx.stream("POST", API_URL + "/ask/stream", json=payload, timeout=REQUEST_TIMEOUT) as r:
+            if r.status_code >= 400:
+                return None, _http_error(r.status_code)
+            for line in r.iter_lines():
+                if not line.strip():
+                    continue
+                msg = json.loads(line)
+                if msg["type"] == "event":
+                    on_event(msg["event"])
+                elif msg["type"] == "result":
+                    return msg["data"], None
+                elif msg["type"] == "error":
+                    return None, msg["message"]
+    except httpx.ConnectError:
+        return None, "The API is not running. Start it with: uvicorn app.api:app"
+    except httpx.TimeoutException:
+        return None, "The request timed out. Please try again."
+    return None, "The answer stopped before it finished. Please try again."
 
 
 def api_online() -> bool:
@@ -169,6 +208,8 @@ def report_markdown(data: dict, question: str | None) -> str:
             if c.get("evidence"):
                 lines += [f"> {c['evidence']}", ""]
             lines += [f"**Why:** {c['reason']}", ""]
+            if c.get("also_reported_by"):
+                lines += ["Also reported by: " + ", ".join(f"[{s['source']}]({s['url']})" for s in c["also_reported_by"]), ""]
     return "\n".join(lines)
 
 
@@ -176,7 +217,9 @@ def render_card(c: dict, i: int, today: date) -> None:
     with st.container(border=True, key=f"card-{c['sentiment']}-{i}"):
         st.markdown(f"**[{_md(c['title'])}]({c['url']})**")
         published = date.fromisoformat(c["published_date"])
-        st.caption(f"🌐 {c['source']} · 📅 {published.strftime('%d %b %Y')}")
+        also = c.get("also_reported_by") or []
+        more = f" · 🗞️ +{len(also)} more source{'s' if len(also) > 1 else ''}" if also else ""
+        st.caption(f"🌐 {c['source']} · 📅 {published.strftime('%d %b %Y')}{more}")
         badges = [
             f":{SENTIMENT_COLOR[c['sentiment']]}-badge[{c['sentiment']}]",
             f":blue-badge[{c['level']} impact]",
@@ -190,6 +233,9 @@ def render_card(c: dict, i: int, today: date) -> None:
         if c.get("evidence"):
             st.markdown(f"> **From the article:** “{_md(c['evidence'])}”")
         st.markdown(f"💡 **Why (analysis):** {_md(c['reason'])}")
+        if also:
+            links = " · ".join(f"[{s['source']}]({s['url']})" for s in also)
+            st.markdown(f"🗞️ **Also reported by:** {links}")
 
 
 def render_cards(cards: list[dict], key: str) -> None:
@@ -269,6 +315,62 @@ def render_result(data: dict, key: str = "ask", question: str | None = None) -> 
         mime="text/markdown",
         key=f"{key}-download",
     )
+    followup_section(data, key)
+
+
+FOLLOWUP_IDEAS = [
+    "Ispe mujhe kya karna chahiye?",
+    "Which news matters most for my costs?",
+    "Short term vs long term risk kya hai?",
+]
+
+
+def _pick_followup(pills_key: str, pending_key: str) -> None:
+    st.session_state[pending_key] = st.session_state.get(pills_key)
+    st.session_state[pills_key] = None
+
+
+def followup_section(data: dict, key: str) -> None:
+    """Chat about this result. Answers come only from its news cards, with sources."""
+    qid = data.get("query_id")
+    if not qid or not data.get("cards"):
+        return
+    store, pending = f"followups-{qid}", f"{key}-fu-pending"
+    if store not in st.session_state:
+        st.session_state[store] = list(data.get("followups") or [])
+
+    with st.container(key=f"chat-{key}"):
+        st.subheader("💬 Ask a follow-up")
+        st.caption("Answers use only the news above, and link their sources.")
+        for f in st.session_state[store]:
+            with st.chat_message("user"):
+                st.markdown(_md(f["question"]))
+            with st.chat_message("assistant", avatar="☀️"):
+                st.markdown(_md(f["answer"]))
+                if f.get("sources"):
+                    st.markdown("Sources: " + " ".join(f"[[{_domain(u)}]]({u})" for u in f["sources"]))
+                if not f.get("grounded", True):
+                    st.caption("⚠️ Not backed by the news above. Treat it with care.")
+
+        st.pills(
+            "Ideas", FOLLOWUP_IDEAS, key=f"{key}-fu-pills", label_visibility="collapsed",
+            on_change=_pick_followup, args=(f"{key}-fu-pills", pending),
+        )
+        with st.form(f"{key}-fu-form", clear_on_submit=True, border=False):
+            c1, c2 = st.columns([5, 1], vertical_alignment="bottom")
+            text = c1.text_input("Your follow-up", placeholder="e.g. Ispe mujhe kya karna chahiye?")
+            sent = c2.form_submit_button("Ask ➤", use_container_width=True)
+
+    ask = st.session_state.pop(pending, None) or (text.strip() if sent else "")
+    if not ask:
+        return
+    with st.spinner("Thinking about it with the news above…"):
+        answer, err = call_api("POST", "/followup", json={"query_id": qid, "question": ask})
+    if err:
+        st.error(err)
+        return
+    st.session_state[store].append(answer)
+    st.rerun()
 
 
 def _use_example() -> None:
@@ -293,7 +395,7 @@ def ask_page() -> None:
             key="question",
             placeholder="e.g. How will rising coal prices affect my module production cost?",
         )
-        topic = st.selectbox("Topic", UI_TOPICS)
+        topic = st.selectbox("Topic", TOPICS)
         submitted = st.form_submit_button("🔍 Analyse impact", type="primary", use_container_width=True)
 
     if submitted:
@@ -301,20 +403,37 @@ def ask_page() -> None:
             st.warning("Please type a question.")
             return
         start = time.monotonic()
-        with st.spinner("Searching news and analysing impact. This can take up to a minute..."):
-            data, err = call_api("POST", "/ask", json={"question": question, "topic": topic, "competitors": []})
+        board = agent_board.AgentBoard()
+        with st.status("🤖 Agents are working on your question…", expanded=True) as status:
+            canvas = st.empty()
+            canvas.markdown(board.html(), unsafe_allow_html=True)
+
+            def on_event(ev: dict) -> None:
+                board.update(ev)
+                canvas.markdown(board.html(), unsafe_allow_html=True)
+
+            payload = {"question": question, "topic": topic}
+            data, err = stream_ask(payload, on_event)
+            seconds = time.monotonic() - start
+            if err or data.get("status") == "error":
+                status.update(label="⚠️ The agents could not finish", state="error", expanded=True)
+            else:
+                status.update(label=f"✅ Agents finished in {seconds:.0f}s", state="complete", expanded=False)
         if err:
             st.session_state.pop("last", None)
             st.error(err)
             return
         st.session_state["last"] = data
         st.session_state["last_question"] = question.strip()
-        st.session_state["last_seconds"] = time.monotonic() - start
+        st.session_state["last_seconds"] = seconds
+        st.session_state["last_board"] = board.html()
+        st.toast(f"Done in {seconds:.0f}s", icon="✅")
+    elif "last" in st.session_state and "last_board" in st.session_state:
+        # Later reruns (filters, sorting) keep the agent trace one click away.
+        with st.expander(f"🤖 How the agents worked ({st.session_state.get('last_seconds', 0):.0f}s)"):
+            st.markdown(st.session_state["last_board"], unsafe_allow_html=True)
 
     if "last" in st.session_state:
-        seconds = st.session_state.get("last_seconds")
-        if submitted and seconds:
-            st.toast(f"Done in {seconds:.0f}s", icon="✅")
         render_result(st.session_state["last"], "ask", st.session_state.get("last_question"))
 
 
@@ -322,6 +441,7 @@ def _ask_again(question: str) -> None:
     st.session_state["page"] = "Ask"
     st.session_state["question"] = question
     st.session_state.pop("last", None)
+    st.session_state.pop("last_board", None)
 
 
 def history_page() -> None:
@@ -364,7 +484,7 @@ def sidebar() -> str:
     with st.sidebar:
         st.markdown("## ☀️ News Impact")
         st.caption("AI agents that read the news for your solar business.")
-        page = st.radio("Page", ["Ask", "History"], key="page", format_func={"Ask": "🔍 Ask", "History": "🕘 History"}.get)
+        page = st.radio("Page", list(PAGES), key="page", format_func=PAGES.get)
         st.divider()
 
         online = api_online()
@@ -381,11 +501,13 @@ def sidebar() -> str:
 
 def main() -> None:
     st.set_page_config(page_title="News Impact", page_icon="☀️", layout="wide")
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS + agent_board.CSS, unsafe_allow_html=True)
     page = sidebar()
     # A plain if/else: a bare expression would make Streamlit print its value ("None").
     if page == "Ask":
         ask_page()
+    elif page == "Trends":
+        trends_page(call_api)
     else:
         history_page()
 

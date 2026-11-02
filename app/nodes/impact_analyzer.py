@@ -5,6 +5,7 @@ import time
 
 from pydantic import BaseModel, Field, model_validator
 
+from app import trace
 from app.config import get_settings
 from app.llm import get_llm
 from app.prompts import IMPACT_SYSTEM, IMPACT_USER
@@ -12,7 +13,8 @@ from app.schemas import Article, Horizon, ImpactCard, Level, Sentiment
 
 log = logging.getLogger(__name__)
 MAX_CONTENT_CHARS = 3000
-MAX_CONCURRENCY = 3  # 8 parallel calls hit Bedrock throttling with Nova Pro
+# Articles analysed at the same time come from IMPACT_CONCURRENCY (default 3):
+# 8 at once hit Bedrock throttling with Nova Pro.
 RETRIES = 2
 RETRY_DELAY_SECONDS = 3.0  # wait before retrying failed articles (throttling needs a pause)
 
@@ -64,9 +66,10 @@ def analyze_impacts(question: str, articles: list[Article], llm=None) -> list[Im
     """
     if not articles:
         return []
-    llm = llm or get_llm(get_settings().model_impact)
+    settings = get_settings()
+    llm = llm or get_llm(settings.model_impact)
     chain = llm.with_structured_output(ImpactOutput)
-    config = {"max_concurrency": MAX_CONCURRENCY}
+    config = {"max_concurrency": settings.impact_concurrency}
 
     results: dict[int, ImpactOutput] = {}
     pending = list(range(len(articles)))
@@ -75,19 +78,30 @@ def analyze_impacts(question: str, articles: list[Article], llm=None) -> list[Im
             break
         if attempt:
             time.sleep(RETRY_DELAY_SECONDS * attempt)
-        outputs = chain.batch(
+            trace.emit("impact_analyzer", "warn", f"retrying {len(pending)} failed article(s)")
+        # batch_as_completed hands back each article as soon as its LLM call finishes.
+        total = len(articles)
+        still_failing = []
+        for pos, out in chain.batch_as_completed(
             [_messages(articles[i]) for i in pending],
             config=config,
             return_exceptions=True,
-        )
-        still_failing = []
-        for i, out in zip(pending, outputs):
+        ):
+            i = pending[pos]
+            title = articles[i].title[:60]
             if isinstance(out, ImpactOutput):
                 results[i] = out
+                done = len(results)
+                label = f"{out.sentiment} · {out.level}" if out.relevant else "not relevant"
+                trace.emit(
+                    "impact_analyzer", "info", f"[{done}/{total}] {label} · “{title}”",
+                    done=done, total=total, sentiment=out.sentiment if out.relevant else None,
+                )
             else:
                 still_failing.append(i)
                 log.warning("impact failed for article %s: %s", articles[i].id, out)
-        pending = still_failing
+                trace.emit("impact_analyzer", "warn", f"failed: “{title}”")
+        pending = sorted(still_failing)
 
     return [
         ImpactCard(article_id=articles[i].id, **results[i].model_dump())

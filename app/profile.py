@@ -18,12 +18,4 @@ DEPENDENCIES = [
     "ALMM, BCD, PLI, PM Surya Ghar policy",
 ]
 
-COMPETITORS = [
-    "Waaree Energies",
-    "Adani Solar",
-    "Tata Power Solar",
-    "Vikram Solar",
-    "Premier Energies",
-]
-
-TOPICS = ["any", "energy prices", "policy", "competitor", "tariff", "market"]
+TOPICS = ["any", "energy prices", "policy", "tariff", "market"]

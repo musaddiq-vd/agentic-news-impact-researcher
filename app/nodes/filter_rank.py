@@ -5,7 +5,8 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 from app.config import IST
-from app.schemas import Article, RawArticle
+from app.nodes.story_merge import group_stories
+from app.schemas import Article, RawArticle, SourceRef
 
 
 def parse_date(value: str | None) -> date | None:
@@ -37,7 +38,8 @@ def filter_rank(
     max_articles: int = 8,
     now: datetime | None = None,
 ) -> list[Article]:
-    """Drop undated/old/duplicate items, then rank: today/yesterday, newest, Tavily score."""
+    """Drop undated/old/duplicate items, rank (today/yesterday, newest, Tavily score), then merge
+    the same story from different sites into one article before keeping the top `max_articles`."""
     today = (now or datetime.now(IST)).astimezone(IST).date()
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
@@ -59,6 +61,7 @@ def filter_rank(
         return (today - d).days <= 1
 
     kept.sort(key=lambda x: (is_recent(x[1]), x[1], x[0].score), reverse=True)
+    stories = group_stories(kept, key=lambda x: (x[0].title, x[1]))
 
     return [
         Article(
@@ -69,6 +72,7 @@ def filter_rank(
             published_date=d,
             content=item.content,
             is_today_or_yesterday=is_recent(d),
+            also=[SourceRef(title=o.title, url=o.url, source=_source(o.url)) for o, _ in others],
         )
-        for i, (item, d) in enumerate(kept[:max_articles], start=1)
+        for i, ((item, d), *others) in enumerate(stories[:max_articles], start=1)
     ]

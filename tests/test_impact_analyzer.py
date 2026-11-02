@@ -37,6 +37,11 @@ class FakeLLM:
         self.inputs.append(inputs)
         return self.batches.pop(0)
 
+    def batch_as_completed(self, inputs, config=None, return_exceptions=False):
+        # finish in reverse order to prove results are matched back by position
+        outputs = self.batch(inputs, config, return_exceptions)
+        return reversed(list(enumerate(outputs)))
+
 
 def test_builds_cards_with_code_set_ids():
     llm = FakeLLM([[output(), output(relevant=False)]])

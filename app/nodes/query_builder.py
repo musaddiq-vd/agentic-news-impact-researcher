@@ -19,7 +19,6 @@ class QueryList(BaseModel):
 def generate_queries(
     question: str,
     topic: str | None = None,
-    competitors: list[str] | None = None,
     llm=None,
 ) -> list[str]:
     """Call the LLM; raises on failure."""
@@ -33,7 +32,6 @@ def generate_queries(
                 QUERY_BUILDER_USER.format(
                     question=question,
                     topic=topic or "any",
-                    competitors=", ".join(competitors or []) or "none",
                 ),
             ),
         ]
@@ -45,12 +43,11 @@ def generate_queries(
 def build_queries(
     question: str,
     topic: str | None = None,
-    competitors: list[str] | None = None,
     llm=None,
 ) -> list[str]:
     """Like generate_queries, but falls back to the raw question on any failure."""
     try:
-        queries = generate_queries(question, topic, competitors, llm)
+        queries = generate_queries(question, topic, llm)
     except Exception as exc:
         log.warning("query_builder failed, using the question as query: %s", exc)
         return [question]

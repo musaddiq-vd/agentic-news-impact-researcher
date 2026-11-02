@@ -51,7 +51,6 @@ def search_news(
     tool = tool or _make_tool(max_results)
 
     articles: list[RawArticle] = []
-    seen: set[str] = set()
     failures = 0
     for query in queries:
         try:
@@ -62,10 +61,8 @@ def search_news(
             continue
         for r in results:
             url = (r.get("url") or "").strip()
-            key = url.rstrip("/").lower()
-            if not url or key in seen:
+            if not url:
                 continue
-            seen.add(key)
             articles.append(
                 RawArticle(
                     title=r.get("title") or "",
@@ -78,4 +75,16 @@ def search_news(
 
     if queries and failures == len(queries):
         raise SearchError("all search queries failed")
-    return articles
+    return dedupe(articles)
+
+
+def dedupe(articles: list[RawArticle]) -> list[RawArticle]:
+    """Keep the first article for each URL (case and trailing slash ignored)."""
+    seen: set[str] = set()
+    out: list[RawArticle] = []
+    for a in articles:
+        key = a.url.rstrip("/").lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(a)
+    return out

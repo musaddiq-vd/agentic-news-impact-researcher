@@ -16,3 +16,7 @@ __pycache__/
 # Local working notes
 CLAUDE.md
 PLAN.md
+
+# Generated output
+briefs/
+evals/results/

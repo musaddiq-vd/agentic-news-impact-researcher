@@ -196,14 +196,77 @@ def test_validator_dropping_every_card_gives_no_news():
     assert result["status"] == "no_news" and result["cards"] == []
 
 
-def test_question_topic_and_competitors_reach_query_builder():
+def test_question_and_topic_reach_query_builder():
     seen = {}
 
-    def qb(question, topic, competitors):
-        seen.update(question=question, topic=topic, competitors=competitors)
+    def qb(question, topic):
+        seen.update(question=question, topic=topic)
         return ["q"]
 
     n = nodes(Calls())
     n.build_queries = qb
-    run_graph("my question", "policy", ["Waaree Energies"], nodes=n)
-    assert seen == {"question": "my question", "topic": "policy", "competitors": ["Waaree Energies"]}
+    run_graph("my question", "policy", nodes=n)
+    assert seen == {"question": "my question", "topic": "policy"}
+
+
+# --- parallel search agents ---
+
+def raw(url):
+    return RawArticle(title="t", url=url, content="c")
+
+
+def test_queries_are_split_across_three_search_agents_and_merged():
+    seen, rank_input = [], {}
+    n = nodes(Calls(), queries=("q1", "q2", "q3", "q4"))
+    n.search = lambda qs: (seen.append(qs), [raw(f"https://s.com/{qs[0]}"), raw("https://s.com/shared/")])[1]
+    n.rank = lambda r: (rank_input.setdefault("urls", [a.url for a in r]), [article()])[1]
+    result = run_graph("q", nodes=n)
+    assert sorted(seen) == [["q1", "q4"], ["q2"], ["q3"]]
+    # merged in agent order, duplicate URL kept once
+    assert rank_input["urls"] == ["https://s.com/q1", "https://s.com/shared/", "https://s.com/q2", "https://s.com/q3"]
+    assert result["status"] == "ok"
+
+
+def test_search_agents_run_in_parallel():
+    import threading
+
+    barrier = threading.Barrier(3, timeout=5)  # only passes if all three wait at the same time
+
+    def search(qs):
+        barrier.wait()
+        return [raw(f"https://s.com/{qs[0]}")]
+
+    n = nodes(Calls(), queries=("q1", "q2", "q3"))
+    n.search = search
+    assert run_graph("q", nodes=n)["status"] == "ok"
+
+
+def test_agents_without_queries_do_not_search():
+    seen = []
+    n = nodes(Calls(), queries=("q1", "q2"))
+    n.search = lambda qs: (seen.append(qs), [raw("https://s.com/1")])[1]
+    run_graph("q", nodes=n)
+    assert sorted(seen) == [["q1"], ["q2"]]
+
+
+def test_one_failed_agent_does_not_stop_the_others():
+    def search(qs):
+        if qs == ["q2"]:
+            raise SearchError("down")
+        return [raw(f"https://s.com/{qs[0]}")]
+
+    n = nodes(Calls(), queries=("q1", "q2", "q3"))
+    n.search = search
+    assert run_graph("q", nodes=n)["status"] == "ok"
+
+
+def test_all_agents_failing_is_search_down():
+    n = nodes(Calls(), queries=("q1", "q2", "q3"), search=SearchError("down"))
+    result = run_graph("q", nodes=n)
+    assert result["status"] == "error" and result["message"] == MSG_SEARCH_DOWN
+
+
+def test_all_agents_crashing_is_generic_error():
+    n = nodes(Calls(), queries=("q1", "q2", "q3"), search=RuntimeError("boom"))
+    result = run_graph("q", nodes=n)
+    assert result["status"] == "error" and result["message"] == MSG_ERROR

@@ -111,6 +111,7 @@ def validate(
                 url=art.url,
                 source=art.source,
                 published_date=art.published_date,
+                also_reported_by=art.also,
             )
         )
 

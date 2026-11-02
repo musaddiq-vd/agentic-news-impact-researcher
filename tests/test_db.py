@@ -46,7 +46,7 @@ def test_init_twice_is_safe(db):
 
 
 def test_save_then_get_roundtrip(db):
-    qid = save_run("my question", "policy", ["Waaree Energies"], ok_result(), path=db)
+    qid = save_run("my question", "policy", ok_result(), path=db)
     run = get_run(qid, path=db)
     assert run.query_id == qid and run.status == "ok" and run.message is None
     assert run.summary == ok_result()["summary"]
@@ -54,7 +54,7 @@ def test_save_then_get_roundtrip(db):
 
 
 def test_only_validated_cards_get_impacts_but_all_articles_saved(db):
-    qid = save_run("q", None, [], ok_result(), path=db)
+    qid = save_run("q", None, ok_result(), path=db)
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT COUNT(*) FROM articles WHERE query_id=?", (qid,)).fetchone()[0] == 3
         assert conn.execute("SELECT COUNT(*) FROM impacts").fetchone()[0] == 2
@@ -62,14 +62,14 @@ def test_only_validated_cards_get_impacts_but_all_articles_saved(db):
 
 def test_no_news_and_error_runs_are_saved(db):
     empty = {"status": "no_news", "message": "No relevant news found", "summary": [], "cards": [], "articles": []}
-    qid = save_run("q", None, [], empty, path=db)
+    qid = save_run("q", None, empty, path=db)
     run = get_run(qid, path=db)
     assert run.status == "no_news" and run.message == "No relevant news found"
     assert run.cards == [] and run.summary == []
 
 
 def test_list_runs_newest_first_and_limit(db):
-    ids = [save_run(f"q{i}", None, [], ok_result(), path=db) for i in range(3)]
+    ids = [save_run(f"q{i}", None, ok_result(), path=db) for i in range(3)]
     runs = list_runs(limit=2, path=db)
     assert [r["query_id"] for r in runs] == [ids[2], ids[1]]
     assert runs[0]["question"] == "q2" and runs[0]["status"] == "ok" and runs[0]["created_at"]
@@ -78,7 +78,7 @@ def test_list_runs_newest_first_and_limit(db):
 def test_evidence_is_saved_and_read_back(db):
     r = ok_result()
     r["cards"] = [card(1, evidence="Duty is 40 percent"), card(2)]
-    qid = save_run("q", None, [], r, path=db)
+    qid = save_run("q", None, r, path=db)
     assert get_run(qid, path=db).cards[0].evidence == "Duty is 40 percent"
 
 
@@ -90,7 +90,7 @@ def test_old_db_without_evidence_column_is_migrated(db):
             " level TEXT NOT NULL, reason TEXT NOT NULL, horizon TEXT NOT NULL);"
         )
     conn.close()
-    qid = save_run("q", None, [], ok_result(), path=db)
+    qid = save_run("q", None, ok_result(), path=db)
     assert len(get_run(qid, path=db).cards) == 2
 
 
@@ -102,7 +102,7 @@ def test_failed_save_leaves_nothing_behind(db):
     bad = ok_result()
     bad["cards"] = [card(1), card(42)]  # no article 42: save must roll back
     with pytest.raises(KeyError):
-        save_run("q", None, [], bad, path=db)
+        save_run("q", None, bad, path=db)
     assert list_runs(path=db) == []
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 0

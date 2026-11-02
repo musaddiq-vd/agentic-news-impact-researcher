@@ -24,11 +24,12 @@ def test_returns_llm_queries():
     ]
 
 
-def test_prompt_includes_question_topic_competitors():
+def test_prompt_includes_question_and_topic():
     llm = FakeLLM(["q"])
-    build_queries("my question", "policy", ["Waaree Energies"], llm=llm)
+    build_queries("my question", "policy", llm=llm)
     user_msg = llm.messages[1][1]
-    assert "my question" in user_msg and "policy" in user_msg and "Waaree Energies" in user_msg
+    assert "my question" in user_msg and "policy" in user_msg
+    assert "ompetitor" not in user_msg
 
 
 def test_falls_back_to_question_on_error():
