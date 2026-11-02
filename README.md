@@ -71,4 +71,3 @@ pytest
 
 ## Docs
 - [REQUIREMENTS.md](REQUIREMENTS.md): goals and rules
-- [PLAN.md](PLAN.md): design and build steps

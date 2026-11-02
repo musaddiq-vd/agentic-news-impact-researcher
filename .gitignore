@@ -12,3 +12,7 @@ __pycache__/
 *.db
 *.sqlite3
 .claude/
+
+# Local working notes
+CLAUDE.md
+PLAN.md
