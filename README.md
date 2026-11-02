@@ -1,19 +1,50 @@
+<a id="top"></a>
+
+<div align="center">
+
 # ☀️ Agentic AI News Impact System
 
 **A team of AI agents that reads the news for a solar module maker, and says what it means for the business.**
 
-Ask a question in English or Hinglish, like *"Coal ka rate badha hai kya, mere module cost pe kya asar padega?"*. In about a minute, nine agents search the last 30 days of news, merge duplicate reports, work out each story's impact (positive or negative, how big, short or long term), and write a short summary. Every point links to its source, and anything an article does not back up is dropped.
+<p>
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/LangGraph-agents-1C3C3C?logo=langchain&logoColor=white" alt="LangGraph">
+  <img src="https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit">
+  <img src="https://img.shields.io/badge/AWS_Bedrock-Amazon_Nova-FF9900?logo=amazonwebservices&logoColor=white" alt="AWS Bedrock">
+  <img src="https://img.shields.io/badge/Tavily-news_search-5B5BD6" alt="Tavily">
+  <img src="https://img.shields.io/badge/SQLite-storage-003B57?logo=sqlite&logoColor=white" alt="SQLite">
+  <img src="https://img.shields.io/badge/tests-203_passing-16A34A?logo=pytest&logoColor=white" alt="203 tests passing">
+</p>
 
-![Ask page](docs/images/ask.jpg)
+<p>
+  <a href="#tour"><img src="https://img.shields.io/badge/Tour-ea580c?style=for-the-badge" alt="Tour"></a>
+  <a href="#architecture"><img src="https://img.shields.io/badge/Architecture-f97316?style=for-the-badge" alt="Architecture"></a>
+  <a href="#flow"><img src="https://img.shields.io/badge/Flow-f59e0b?style=for-the-badge" alt="Flow"></a>
+  <a href="#setup"><img src="https://img.shields.io/badge/Setup-16a34a?style=for-the-badge" alt="Setup"></a>
+  <a href="#run"><img src="https://img.shields.io/badge/Run-0ea5e9?style=for-the-badge" alt="Run"></a>
+  <a href="#brief"><img src="https://img.shields.io/badge/Daily_Brief-6366f1?style=for-the-badge" alt="Daily brief"></a>
+  <a href="#eval"><img src="https://img.shields.io/badge/Eval-8b5cf6?style=for-the-badge" alt="Eval"></a>
+  <a href="#layout"><img src="https://img.shields.io/badge/Project_Layout-64748b?style=for-the-badge" alt="Project layout"></a>
+</p>
 
-> Screenshots in this README use demo data.
+</div>
+
+Ask a question in English or Hinglish, like *"Coal ka rate badha hai kya, mere module cost pe kya asar padega?"*. In about a minute, **nine agents** search the last 30 days of news, merge duplicate reports, work out each story's impact (positive or negative, how big, short or long term), and write a short summary. **Every point links to its source**, and anything an article does not back up is dropped.
+
+<div align="center">
+  <img src="docs/images/ask.jpg" width="720" alt="Ask page">
+</div>
+
+> [!NOTE]
+> The screenshots in this README use demo data.
 
 ---
 
 ## ✨ What it does
 
 | | Feature | What you get |
-|---|---|---|
+|:-:|---|---|
 | 🤖 | **Live agent board** | Watch every agent work in real time: three search agents in parallel, then per-article progress |
 | 🗞️ | **Impact cards** | Sentiment, level, horizon, a word-for-word quote from the article, and why it matters |
 | 🔗 | **Duplicate merge** | The same story from several sites becomes one card ("Also reported by …") |
@@ -24,35 +55,66 @@ Ask a question in English or Hinglish, like *"Coal ka rate badha hai kya, mere m
 
 ---
 
+<a id="tour"></a>
+
 ## 📸 A quick tour
 
-**1. The agents at work.** Each card lights up as its agent runs. The three search agents run at the same time.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>1. The agents at work</b><br>
+      Each card lights up as its agent runs. The three search agents run at the same time.<br><br>
+      <img src="docs/images/live-agents.jpg" alt="Live agent board">
+    </td>
+    <td width="50%" valign="top">
+      <b>2. The answer</b><br>
+      Counts, a sourced summary, and an impact breakdown.<br><br>
+      <img src="docs/images/result.jpg" alt="Result">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>3. Impact cards</b><br>
+      A quote taken word for word from the article, what it means, and the other sites that reported it.<br><br>
+      <img src="docs/images/impact-card.jpg" alt="Impact card">
+    </td>
+    <td width="50%" valign="top">
+      <b>4. Follow-up questions</b><br>
+      Answers use only the news above and cite it.<br><br>
+      <img src="docs/images/follow-up.jpg" alt="Follow-up chat">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>5. Trends: the mood</b><br>
+      Overall mood, and what changed most.<br><br>
+      <img src="docs/images/trends-mood.jpg" alt="Trends mood">
+    </td>
+    <td width="50%" valign="top">
+      <b>6. Trends: day by day</b><br>
+      News per day by sentiment, and a rolling mood line.<br><br>
+      <img src="docs/images/trends-charts.jpg" alt="Trends charts">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>7. Trends: themes</b><br>
+      Coal, policy, power tariff and more, each getting better or worse.<br><br>
+      <img src="docs/images/trends-themes.jpg" alt="Trends themes">
+    </td>
+    <td width="50%" valign="top">
+      <b>8. The morning email</b><br>
+      Headline, stats, mood meter and top stories.<br><br>
+      <img src="docs/images/email-brief.jpg" alt="Email brief">
+    </td>
+  </tr>
+</table>
 
-![Live agent board](docs/images/live-agents.jpg)
-
-**2. The answer.** Counts, a sourced summary, and an impact breakdown.
-
-![Result](docs/images/result.jpg)
-
-**3. Impact cards.** Each card has a quote taken word for word from the article and the analysis of what it means. Duplicate reports from other sites are folded into one card.
-
-![Impact card](docs/images/impact-card.jpg)
-
-**4. Follow-up questions.** The answers use only the news above and cite it.
-
-![Follow-up chat](docs/images/follow-up.jpg)
-
-**5. Trends.** Is coal news getting more negative? Is policy news turning positive?
-
-![Trends mood](docs/images/trends-mood.jpg)
-![Trends charts](docs/images/trends-charts.jpg)
-![Trends themes](docs/images/trends-themes.jpg)
-
-**6. The morning email.**
-
-![Email brief](docs/images/email-brief.jpg)
+<p align="right"><a href="#top">⬆ back to top</a></p>
 
 ---
+
+<a id="architecture"></a>
 
 ## 🏗️ Architecture
 
@@ -90,11 +152,16 @@ flowchart LR
     MAIL -->|SMTP| INBOX[📬 Inbox]
 ```
 
-- The **UI only talks to the API**. It never touches the graph or the database.
-- The **graph never touches the database**. The API saves each run, and the daily brief saves its own runs so they show up in History and Trends.
-- **Every agent reports what it is doing** through `app/trace.py`. The API prints those events as colored log lines and streams them to the UI.
+> [!IMPORTANT]
+> - The **UI only talks to the API**. It never touches the graph or the database.
+> - The **graph never touches the database**. The API saves each run, and the daily brief saves its own runs so they show up in History and Trends.
+> - **Every agent reports what it is doing** through `app/trace.py`. The API prints those events as colored log lines and streams them to the UI.
+
+<p align="right"><a href="#top">⬆ back to top</a></p>
 
 ---
+
+<a id="flow"></a>
 
 ## 🔄 How a question flows
 
@@ -114,8 +181,8 @@ flowchart TD
     VA --> OUT([✅ Summary + impact cards with source links])
 ```
 
-| # | Agent | Uses LLM | Job |
-|---|---|:---:|---|
+| # | Agent | LLM | Job |
+|:-:|---|:---:|---|
 | 1 | **query_builder** | ✅ | Turns the question (English or Hinglish) into 2-4 English search queries |
 | 2-4 | **search_1/2/3** | | The queries are split across three agents that search Tavily **at the same time**. If one fails, the others carry on |
 | 5 | **merge** | | Joins the three result lists and removes duplicate links |
@@ -124,7 +191,9 @@ flowchart TD
 | 8 | **summarizer** | ✅ | Up to 5 fact-only points, each citing its articles |
 | 9 | **validator** | | Drops cards whose quote is not in the article, points with unknown sources or invented numbers, and summaries not grounded in the text. Code adds the links |
 
-### Live streaming, step by step
+<details>
+<summary><b>📡 Live streaming, step by step</b></summary>
+<br>
 
 ```mermaid
 sequenceDiagram
@@ -143,7 +212,11 @@ sequenceDiagram
     A-->>U: {"type": "result"}
 ```
 
-The same events show up in the API terminal:
+</details>
+
+<details>
+<summary><b>🖥️ What the API terminal shows</b></summary>
+<br>
 
 ```
 ╭─ 🚀 New run · "How will rising coal prices affect my module production cost?"
@@ -157,19 +230,24 @@ The same events show up in the API terminal:
 ╰─ ✅ ok in 8.70s
 ```
 
+</details>
+
+### 🛡️ Rules the system never breaks
+
+> [!TIP]
+> 1. Every claim links to a source, and a claim without one is dropped.
+> 2. Only news from the last 30 days that has a date is used.
+> 3. Today's and yesterday's news comes first.
+> 4. No invented facts, numbers, names or dates. If nothing is found, it says *"No relevant news found"*.
+> 5. Every impact card has a sentiment, a level, a one-line reason and a horizon.
+> 6. The LLM only sees article text and returns article IDs. **Code adds every URL.**
+> 7. API keys live only in `.env`.
+
+<p align="right"><a href="#top">⬆ back to top</a></p>
+
 ---
 
-## 🛡️ Rules the system never breaks
-
-1. Every claim links to a source, and a claim without one is dropped.
-2. Only news from the last 30 days that has a date is used.
-3. Today's and yesterday's news comes first.
-4. No invented facts, numbers, names or dates. If nothing is found, it says *"No relevant news found"*.
-5. Every impact card has a sentiment, a level, a one-line reason and a horizon.
-6. The LLM only sees article text and returns article IDs. **Code adds every URL.**
-7. API keys live only in `.env`.
-
----
+<a id="setup"></a>
 
 ## 🚀 Setup (Windows)
 
@@ -180,7 +258,11 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Fill in `.env`:
+Then fill in `.env`:
+
+<details>
+<summary><b>⚙️ All settings</b></summary>
+<br>
 
 | Setting | What it is |
 |---|---|
@@ -190,7 +272,15 @@ Fill in `.env`:
 | `MAX_ARTICLES` (8), `DAYS` (30) | How many stories, and how far back |
 | `IMPACT_CONCURRENCY` (3) | Articles analysed at once. Raise it only if Bedrock does not throttle |
 | `TRACE_LOGS` (1) | Colored agent lines in the API terminal (`0` turns them off) |
-| `SMTP_*`, `BRIEF_TO`, `APP_URL` | Daily email brief (see below) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Email for the daily brief |
+| `BRIEF_TO`, `APP_URL` | Who gets the brief, and the app link inside it |
+
+</details>
+
+> [!WARNING]
+> Never commit `.env`. It holds your keys and is already in `.gitignore`.
+
+<a id="run"></a>
 
 ## ▶️ Run
 
@@ -203,9 +293,11 @@ uvicorn app.api:app --host 127.0.0.1 --port 8000
 streamlit run ui/streamlit_app.py
 ```
 
-Open http://localhost:8501.
+Open **http://localhost:8501**.
 
-### API
+<details>
+<summary><b>🔌 API endpoints</b></summary>
+<br>
 
 | Endpoint | What it does |
 |---|---|
@@ -216,28 +308,34 @@ Open http://localhost:8501.
 | `GET /trends?days=7\|30\|90` | Mood, news per day by sentiment, and themes |
 | `GET /health` | Health check |
 
+</details>
+
+<p align="right"><a href="#top">⬆ back to top</a></p>
+
 ---
+
+<a id="brief"></a>
 
 ## 📧 Daily email brief
 
 Every morning the brief asks three standing questions (energy prices, policy, market) and emails one styled report. It has the top headline, stats, this week's mood meter with the themes that moved, the top stories with quotes, and a short summary per topic.
 
-1. Fill in `SMTP_USER`, `SMTP_PASSWORD` (a Gmail **App Password**) and `BRIEF_TO` in `.env`.
-2. Preview it without sending. This writes `briefs/brief-<date>.html`:
-   ```bash
-   python -m app.brief --dry-run
-   ```
-3. Send it once:
-   ```bash
-   python -m app.brief
-   ```
-4. Schedule it every day at 8 AM. If the PC is off at that time, it runs when the PC is next on:
-   ```bash
-   powershell -ExecutionPolicy Bypass -File scripts\schedule_brief.ps1 -Time 08:00
-   ```
-   Remove it with `-Remove`. The log goes to `briefs\brief.log`.
+| Step | Command |
+|---|---|
+| 1. Fill `SMTP_USER`, `SMTP_PASSWORD` (a Gmail **App Password**) and `BRIEF_TO` in `.env` | |
+| 2. Preview without sending (writes `briefs/brief-<date>.html`) | `python -m app.brief --dry-run` |
+| 3. Send it once | `python -m app.brief` |
+| 4. Schedule it every day at 8 AM | `powershell -ExecutionPolicy Bypass -File scripts\schedule_brief.ps1 -Time 08:00` |
+| Remove the schedule | `powershell -ExecutionPolicy Bypass -File scripts\schedule_brief.ps1 -Remove` |
+
+> [!NOTE]
+> If the PC is off at the scheduled time, the brief runs as soon as the PC is on again. The log goes to `briefs\brief.log`.
+
+<p align="right"><a href="#top">⬆ back to top</a></p>
 
 ---
+
+<a id="eval"></a>
 
 ## 🧪 Quality eval on real data
 
@@ -247,23 +345,33 @@ Every morning the brief asks three standing questions (energy prices, policy, ma
 python -m evals.run
 ```
 
-Every answer is checked automatically:
+| Check | Rule |
+|---|---|
+| `status` | The status is allowed (`ok` or `no_news`) |
+| `summary_sources` | Every summary point has a valid source |
+| `dates_in_window` | Every card is from the last 30 days |
+| `fresh_first` | Today's and yesterday's news comes first |
+| `evidence_is_quoted` | Every quote appears word for word in its article |
+| `no_urls_in_text` | There are no URLs in LLM-written text |
+| `on_topic` | The cards are on topic |
+| `no_cards_off_topic` | Off-topic questions produce no cards |
 
-- ✅ the status is allowed (`ok` or `no_news`)
-- ✅ every summary point has a valid source
-- ✅ every card is from the last 30 days, with fresh news first
-- ✅ every quote appears word for word in its article
-- ✅ there are no URLs in LLM-written text
-- ✅ the cards are on topic
-- ✅ off-topic questions produce no cards
+Each run is saved in `evals/results/` and compared with the previous one. A case that passed before and fails now is flagged as a **REGRESSION** (exit code 1). Use `--only coal-cost,almm` to run a few cases, and `--min-score 0.9` to set a pass bar.
 
-Each run is saved in `evals/results/` and compared with the previous one. A case that passed before and fails now is flagged as a **REGRESSION** (exit code 1). Run it before and after you change a prompt. Use `--only coal-cost,almm` to run a few cases, and `--min-score 0.9` to set a pass bar.
+> [!CAUTION]
+> The eval makes real Tavily and Bedrock calls, about 13 runs. Run it before and after you change a prompt, not on every save.
 
-This makes real Tavily and Bedrock calls, about 13 runs.
+<p align="right"><a href="#top">⬆ back to top</a></p>
 
 ---
 
+<a id="layout"></a>
+
 ## 🗂️ Project layout
+
+<details open>
+<summary><b>Folders and files</b></summary>
+<br>
 
 ```
 app/
@@ -291,6 +399,8 @@ docs/images/         screenshots
 tests/               pytest (Tavily, Bedrock and SMTP are mocked)
 ```
 
+</details>
+
 ## ✅ Tests
 
 ```bash
@@ -300,4 +410,7 @@ pytest
 All external services are mocked, so the tests run offline in about 20 seconds.
 
 ## 📚 Docs
+
 - [REQUIREMENTS.md](REQUIREMENTS.md): goals and rules
+
+<p align="right"><a href="#top">⬆ back to top</a></p>
